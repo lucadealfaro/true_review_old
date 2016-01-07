@@ -1,0 +1,3 @@
+[submodule "modules/similarity"]
+	path = modules/similarity
+	url = git@bitbucket.org:luca_de_alfaro/similarity.git
