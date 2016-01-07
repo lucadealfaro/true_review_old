@@ -14,13 +14,34 @@ from gluon.contrib.appconfig import AppConfig
 ## once in production, remove reload=True to gain full speed
 myconf = AppConfig(reload=True)
 
+# logging.
+import logging
+if request.env.web2py_runtime_gae:
+    logger = logging
+else:
+    import sys
+    FORMAT = "%(asctime)s %(levelname)s %(process)s %(thread)s %(funcName)s():%(lineno)d %(message)s"
+    logging.basicConfig(stream=sys.stderr)
+    logger = logging.getLogger(request.application)
+    logger.setLevel(logging.INFO)
+
+from gluon import current
+logging = logger
+current.logger = logger
+current.logging = logging
+
+import os
 is_gae = False
 is_test_version = True # We are testing unless we are on the official gae version.
+is_local_version = True # Local, not running on the cloud.
 gae_version_id = os.environ.get("CURRENT_VERSION_ID")
 gae_application_id = os.environ.get('APPLICATION_ID')
+logger.info("Application id: %r Version id: %r" % (gae_application_id, gae_version_id))
+
 if request.env.web2py_runtime_gae:
     is_gae = True
     is_test_version = gae_version_id.endswith('test')
+    is_local_version = gae_application_id.startswith('dev~')
 
 import logging
 if request.env.web2py_runtime_gae:
@@ -37,13 +58,12 @@ if not request.env.web2py_runtime_gae:
     db = DAL(myconf.take('db.uri'), pool_size=myconf.take('db.pool_size', cast=int), check_reserved=['all'])
     gdb = DAL(myconf.take('db.guri'), pool_size=myconf.take('db.pool_size', cast=int), check_reserved=['all'])
 else:
-    if is_test_version:
-        db = DAL('google:sql://true-review:true-review/true-review-test',
-                 migrate_enabled=True, )
+    if is_test_version or is_local_version:
+        db = DAL('google:sql://true-review:true-review/true_review_test')
         ## connect to Google BigTable (optional 'google:datastore://namespace')
         gdb = DAL('google:datastore+ndb//test')
     else:
-        db = DAL('google:sql://true-review:true-review/true-review-prod',
+        db = DAL('google:sql://true-review:true-review/true_review_prod',
                  migrate_enabled=False, ) # Do NOT touch these migrate_enabled=False!!
         gdb = DAL('google:datastore+ndb//prod')
     ## store sessions and tickets there
@@ -113,12 +133,6 @@ mail = auth.settings.mailer
 mail.settings.server = 'logging' if request.is_local else myconf.take('smtp.server')
 mail.settings.sender = myconf.take('smtp.sender')
 mail.settings.login = myconf.take('smtp.login')
-
-# logging.
-from gluon import current
-logging = logger
-current.logger = logger
-current.logging = logging
 
 # Let's log the request.
 if request.env.path_info.startswith('/user/'):

@@ -5,7 +5,7 @@
 ## Customize your APP title, subtitle and menus here
 #########################################################################
 
-response.logo = A(SPAN(SPAN('True', _class='main_logo_true'), SPAN('Check', _class='main_logo_review'), _class='navbar-brand'),
+response.logo = A(SPAN(SPAN('True', _class='main_logo_true'), SPAN('Review', _class='main_logo_review'), _class='navbar-brand'),
                   _href=URL('true_review', 'default', 'index'))
 response.title = 'TrueReview'
 response.subtitle = 'Open, truthful post-publication review of scientific papers.'
