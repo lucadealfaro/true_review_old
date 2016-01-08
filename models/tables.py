@@ -33,6 +33,8 @@ db.define_table('paper',
                 Field('start_date', 'datetime', default=datetime.utcnow()),
                 Field('end_date', 'datetime'), # If this is None, then the record is current.
                 Field('file'), # This is either a pointer to GCS (or blobstore?), or a link to where the file can be found.
+                Field('num_reviews', 'integer'), # We need to have this info fast, hence the denormalization.
+                Field('score', 'double'),
                 )
 
 # This table explains the current roles of a user in a venue.
