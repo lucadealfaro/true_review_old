@@ -4,6 +4,9 @@
 from google.appengine.api import taskqueue
 import json
 
+def dbupdate():
+    return "ok"
+
 def index():
     """ Serves the main page."""
     return dict()

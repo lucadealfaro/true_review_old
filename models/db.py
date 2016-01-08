@@ -59,7 +59,7 @@ if not request.env.web2py_runtime_gae:
     gdb = DAL(myconf.take('db.guri'), pool_size=myconf.take('db.pool_size', cast=int), check_reserved=['all'])
 else:
     if is_test_version or is_local_version:
-        db = DAL('google:sql://true-review:true-review/true_review_test', migrate_enabled=True)
+        db = DAL('google:sql://true-review:true-review/true_review_test', migrate_enabled=False)
         ## connect to Google BigTable (optional 'google:datastore://namespace')
         gdb = DAL('google:datastore+ndb//test')
     else:
@@ -112,7 +112,6 @@ my_tz_nice_detector_widget = lambda field, value : tz_nice_detector_widget(field
 
 auth.settings.extra_fields['auth_user']= [
   Field('user_timezone', 'string', widget=my_tz_nice_detector_widget),
-  Field('user_key', 'string', readable=False, writable=False, default=session.user_key),
 ]
 
 ## create all tables needed by auth if not custom tables
