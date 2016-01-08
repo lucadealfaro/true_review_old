@@ -6,7 +6,7 @@ from datetime import datetime
 gdb.define_table('keyval',
                  Field('content', 'blob'))
 
-db.define_table('user',
+db.define_table('truser',
                 Field('email'), # This is the key
                 Field('affiliation'),
                 Field('link', requires=IS_URL()), # Url associated with user profile
@@ -42,7 +42,7 @@ db.define_table('paper',
 # for admins, reviewers, authors, etc?
 # Also it might mean lots of updates to the same table.
 db.define_table('role',
-                Field('user', 'reference user'),
+                Field('user', 'reference truser'),
                 Field('topic', 'reference topic'),
                 Field('is_reviewer', 'boolean'),
                 Field('is_author', 'boolean'),
@@ -51,7 +51,7 @@ db.define_table('role',
 
 # user + topic form a key
 db.define_table('review_score_history',
-                Field('user', 'reference user'),
+                Field('user', 'reference truser'),
                 Field('topic', 'reference topic'),
                 Field('review_score', 'double'),
                 Field('start_date', 'datetime', default=datetime.utcnow()),
@@ -60,7 +60,7 @@ db.define_table('review_score_history',
 
 # author + paper form a key
 db.define_table('review',
-                Field('author', 'reference user'),
+                Field('author', 'reference truser'),
                 Field('paper', 'reference paper'),
                 Field('topic', 'reference topic'), # Strictly speaking useless as can be reconstructed.  Keep?
                 Field('start_date', 'datetime', default=datetime.utcnow()),

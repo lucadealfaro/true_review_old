@@ -13,7 +13,7 @@ else:
     # If the timezone is known in the session, but not in the user profile, updates the user profile.
     if session.user_timezone is not None and auth.user.user_timezone is None:
         logger.info("Updating timezone in profile to %r" % session.user_timezone)
-        db.auth_user[auth.user.id] = dict(user_timezone = session.user_timezone)
+        gdb.auth_user[auth.user.id] = dict(user_timezone = session.user_timezone)
         auth.user.user_timezone = session.auth.user.user_timezone = user_timezone
 
 
