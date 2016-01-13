@@ -43,8 +43,8 @@ db.define_table('paper',
 db.define_table('paper_in_topic',
                 Field('paper_id'),
                 Field('topic', 'reference topic'),
-                Field('num_reviews', 'integer'), # We need to have this info fast, hence the denormalization.
-                Field('score', 'double'),
+                Field('num_reviews', 'integer', default=0), # We need to have this info fast, hence the denormalization.
+                Field('score', 'double', default=0),
                 Field('start_date', 'datetime', default=datetime.utcnow()),
                 Field('end_date', 'datetime'), # If this is None, then the record is current.
                 )

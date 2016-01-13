@@ -3,6 +3,7 @@
 
 from google.appengine.api import taskqueue
 import json
+import review_utils
 
 def dbupdate():
     return "ok"
@@ -19,6 +20,7 @@ def index():
         maxtextlength=48,
     )
     return dict(grid=grid)
+
 
 def topic():
     """Displays a topic.
@@ -43,10 +45,58 @@ def topic():
         maxtextlength=48,
     )
     add_paper_link = A(icon_add, 'Add a paper', _class='btn btn-success',
-                       _href=URL('default', 'add_paper', args=[topic.id]))
+                       _href=URL('default', 'add_paper', vars=dict(topic=topic.id)))
     return dict(top_reviewers=top_reviewers,
                 grid=grid,
                 add_paper_link=add_paper_link)
+
+
+def edit_paper():
+    """This is a temporary page, so that we can add papers to
+    a series of topics.
+    In reality we need a more sophisticated method for adding or editing
+    papers, and for importing from ArXiV.
+    If args(0) is specified, it is the id of the paper to edit.
+    If the variable 'topic' is specified, it is taken to be the topic id
+    of a paper to which the paper belongs by default."""
+    is_create = request.args(0) is None
+    paper = None if is_create else db.paper(request.args(0))
+    if not (is_create or paper):
+        redirect(URL('default', 'index')) # Edit of non-existing paper.
+    topics = set()
+    if is_create and request.vars.topic is not None:
+        topics = {request.vars.topic}
+    if not is_create:
+        topics = set(db(db.paper_in_topic.paper_id == paper.paper_id).select(db.paper_in_topic.topic).as_list())
+    # Creates the form.
+    form = SQLFORM.factory(
+        Field('title', default=None if is_create else paper.title),
+        Field('authors', 'list:string', default=None if is_create else paper.authors),
+        Field('abstract', 'text', default=None if is_create else paper.abstract),
+        Field('file', default=None if is_create else paper.file),
+        Field('topics', 'list:reference topic', default=topics, requires=IS_IN_DB(db, db.topic.id, multiple=True))
+    )
+    if form.process().accepted:
+        # We have to carry out the requests in the form.
+        if is_create:
+            # We have to come up with a new random id.
+            random_paper_id = review_utils.get_random_id()
+            # We write the paper.
+            i = db.paper.insert(paper_id=random_paper_id,
+                                title=form.vars.title,
+                                authors=form.vars.authors,
+                                abstract=text_store_write(form.vars.abstract),
+                                file=form.vars.file,
+                                start_date=datetime.utcnow(),
+                                end_date=None
+                                )
+            # Then, we add the paper to each topic.
+            for t in form.vars.topics:
+                db.paper_in_topic.insert(paper_id=random_paper_id, topic=t)
+
+        else:
+            # This is an update of an existing paper.
+    
 
 
 def user():
