@@ -38,11 +38,12 @@ def topic():
 
     links = []
     links.append(dict(header='',
-                      body=lambda r: A('Edit', _href=URL('default', 'edit_paper', args=[r.paper.id], vars=dict(topic=topic.id)))))
+                      body=lambda r: A('Edit', _href=URL('default', 'edit_paper', args=[r.paper.paper_id], vars=dict(topic=topic.id)))))
     grid = SQLFORM.grid(q,
         args=request.args[:1], # The first parameter is the topic number.
         orderby=~db.paper_in_topic.score,
-        csv=False, details=True,
+        fields=[db.paper.id, db.paper.title, db.paper.authors, db.paper.paper_id],
+        csv=False, details=False,
         links=links,
         # These all have to be done with special methods.
         create=False,
@@ -65,19 +66,17 @@ def edit_paper():
     If args(0) is specified, it is the id of the paper to edit.
     If the variable 'topic' is specified, it is taken to be the topic id
     of a paper to which the paper belongs by default."""
-    is_create = request.args(0) is None
-    paper = None if is_create else db.paper(request.args(0))
-    if not (is_create or paper):
-        redirect(URL('default', 'index')) # Edit of non-existing paper.
+    paper = db(db.paper.paper_id == request.args(0)).select(orderby=~db.paper.start_date).first()
+    is_create = paper is None
     # Creates the form.
     form = SQLFORM.factory(
         Field('title', default=None if is_create else paper.title),
         Field('authors', 'list:string', default=None if is_create else paper.authors),
-        Field('abstract', 'text', default=None if is_create else paper.abstract),
+        Field('abstract', 'text', default=None if is_create else text_store_read(paper.abstract)),
         Field('file', default=None if is_create else paper.file),
         # Massimo, why can't I use the line below?
         # Field('topics', 'list:reference topic', default=[topic], requires=IS_IN_DB(db, 'topic.id', '%(name)s', multiple=(1,100)))
-        Field('topics', 'list:reference topic', default=[topic])
+        Field('topics', 'list:reference topic', default=[request.vars.topic])
     )
     if form.process().accepted:
         # We have to carry out the requests in the form.
@@ -107,6 +106,7 @@ def edit_paper():
         previous_occurrences = db((db.paper_in_topic.paper_id == random_paper_id) &
                                   (db.paper_in_topic.end_date == None)).select()
         for t in previous_occurrences:
+            # Massimo, here I get an error because form.vars.topics is a string, but why is it a string rather than a list of references?
             if t.topic not in form.vars.topics:
                 t.update_record(end_date=now)
         # Second, for each new topic, searches.  If the paper has never been in that topic before,

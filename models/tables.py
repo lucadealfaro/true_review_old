@@ -53,6 +53,8 @@ db.define_table('paper',
                 Field('start_date', 'datetime', default=datetime.utcnow()),
                 Field('end_date', 'datetime'), # If this is None, then the record is current.
                 )
+db.paper.id.readable = False
+db.paper.paper_id.readable = False
 db.paper.abstract.represent = lambda v, r: text_store_read(int(v))
 
 # Paper score in topic
@@ -64,6 +66,7 @@ db.define_table('paper_in_topic',
                 Field('start_date', 'datetime', default=datetime.utcnow()),
                 Field('end_date', 'datetime'), # If this is None, then the record is current.
                 )
+db.paper_in_topic.paper_id.readable = False
 
 # This table explains the current roles of a user in a venue.
 # The top question is: should this table be split into multiple separate tables,
