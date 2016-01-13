@@ -9,7 +9,44 @@ def dbupdate():
 
 def index():
     """ Serves the main page."""
-    return dict()
+    # Displays list of topics.
+    q = db.topic
+    grid = SQLFORM.grid(q,
+        csv=False, details=True,
+        create=is_logged_in,
+        editable=is_logged_in,
+        deletable=is_logged_in,
+        maxtextlength=48,
+    )
+    return dict(grid=grid)
+
+def topic():
+    """Displays a topic.
+    We display both the top reviewers, truncated, and the list of all papers."""
+    topic = db.topic(request.args(0)) or redirect(URL('default', 'index'))
+    # Truncated list of top reviewers in this topic.
+    # We would better cache it, as it will be requested very often, but
+    # for the moment we just produce it.
+    top_reviewers = db((db.reviewer.topic == topic.id) &
+                       (db.reviewer.user == db.person.id)
+                       ).select(orderby=~db.reviewer.reputation, limitby=(0, 10))
+    q = ((db.paper_in_topic.topic == topic.id) &
+         (db.paper_in_topic.paper_id == db.paper.paper_id) &
+         (db.paper.end_date == None))
+    grid = SQLFORM.grid(q,
+        args=request.args[:1], # The first parameter is the topic number.
+        orderby=~db.paper_in_topic.score,
+        csv=False, details=True,
+        create=False,
+        editable=is_logged_in,
+        deletable=is_logged_in,
+        maxtextlength=48,
+    )
+    add_paper_link = A(icon_add, 'Add a paper', _class='btn btn-success',
+                       _href=URL('default', 'add_paper', args=[topic.id]))
+    return dict(top_reviewers=top_reviewers,
+                grid=grid,
+                add_paper_link=add_paper_link)
 
 
 def user():

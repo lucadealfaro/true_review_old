@@ -1,0 +1,16 @@
+{{left_sidebar_enabled,right_sidebar_enabled=False,False}}
+{{extend 'layout.html'}}
+
+{{block header}}
+{{end}}
+
+<h1>Papers</h1>
+{{=add_paper_link}}
+{{=grid}}
+
+<h2>Top Reviewers</h2>
+<ul>
+{{for p in top_reviewers:}}
+  <li>{{=p.name}}</li>
+{{pass}}
+</ul>
