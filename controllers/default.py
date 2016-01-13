@@ -38,7 +38,7 @@ def topic():
 
     links = []
     links.append(dict(header='',
-                      body=lambda r: A('Edit', _href=URL('default', 'edit_paper', args=[r.id], vars=dict(topic=topic.id)))))
+                      body=lambda r: A('Edit', _href=URL('default', 'edit_paper', args=[r.paper.id], vars=dict(topic=topic.id)))))
     grid = SQLFORM.grid(q,
         args=request.args[:1], # The first parameter is the topic number.
         orderby=~db.paper_in_topic.score,
@@ -69,18 +69,15 @@ def edit_paper():
     paper = None if is_create else db.paper(request.args(0))
     if not (is_create or paper):
         redirect(URL('default', 'index')) # Edit of non-existing paper.
-    topics = set()
-    if is_create and request.vars.topic is not None:
-        topics = {request.vars.topic}
-    if not is_create:
-        topics = set(db(db.paper_in_topic.paper_id == paper.paper_id).select(db.paper_in_topic.topic).as_list())
     # Creates the form.
     form = SQLFORM.factory(
         Field('title', default=None if is_create else paper.title),
         Field('authors', 'list:string', default=None if is_create else paper.authors),
         Field('abstract', 'text', default=None if is_create else paper.abstract),
         Field('file', default=None if is_create else paper.file),
-        Field('topics', 'list:reference topic', default=[topic], requires=IS_IN_DB(db, 'topic.id', '%(name)s', multiple=True))
+        # Massimo, why can't I use the line below?
+        # Field('topics', 'list:reference topic', default=[topic], requires=IS_IN_DB(db, 'topic.id', '%(name)s', multiple=(1,100)))
+        Field('topics', 'list:reference topic', default=[topic])
     )
     if form.process().accepted:
         # We have to carry out the requests in the form.
@@ -139,7 +136,6 @@ def edit_paper():
             redirect(URL('default', 'topic', args=[request.vars.topic]))
         else:
             redirect(URL('default', 'index'))
-    logger.info("Topics: %r" % form.vars.topics)
     return dict(form=form)
 
 
