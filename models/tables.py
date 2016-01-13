@@ -6,6 +6,21 @@ from datetime import datetime
 gdb.define_table('keyval',
                  Field('content', 'blob'))
 
+# Functions for storing text
+def text_store_read(k):
+    """Reads a keystore value for key k."""
+    return gdb.keyval(k).content
+
+def text_store_write(v, key=None):
+    """Writes a text store value of v, with key k if specified.  Returns the key."""
+    if key is None:
+        return gdb.keyval.insert(content=v)
+    else:
+        kk = int(key)
+        gdb.keyval.update_or_insert((gdb.keyval.id == kk), id=kk, content=v)
+        return kk
+
+
 db.define_table('person',
                 Field('email'), # This is the key
                 Field('name'), # Name to be used for display purposes.
@@ -38,6 +53,7 @@ db.define_table('paper',
                 Field('start_date', 'datetime', default=datetime.utcnow()),
                 Field('end_date', 'datetime'), # If this is None, then the record is current.
                 )
+db.paper.abstract.represent = lambda v, r: text_store_read(int(v))
 
 # Paper score in topic
 db.define_table('paper_in_topic',
