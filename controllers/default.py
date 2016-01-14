@@ -38,11 +38,12 @@ def topic_index():
 
     links = []
     links.append(dict(header='',
-                      body=lambda r: A('Edit', _href=URL('default', 'edit_paper', args=[r.paper_id], vars=dict(topic=topic.id)))))
+                      body=lambda r: A('Edit', _href=URL('default', 'edit_paper',
+                                                         args=[r.paper_in_topic.paper_id], vars=dict(topic=topic.id)))))
     grid = SQLFORM.grid(q,
         args=request.args[:1], # The first parameter is the topic number.
         orderby=~db.paper_in_topic.score,
-        fields=[db.paper.id, db.paper.paper_id, db.paper.title, db.paper.authors],
+        fields=[db.paper_in_topic.paper_id, db.paper.id, db.paper.paper_id, db.paper.title, db.paper.authors],
         csv=False, details=False,
         links=links,
         # These all have to be done with special methods.
@@ -75,8 +76,9 @@ def edit_paper():
         Field('authors', 'list:string', default=None if is_create else paper.authors),
         Field('abstract', 'text', default=None if is_create else text_store_read(paper.abstract)),
         Field('file', default=None if is_create else paper.file),
-        # Massimo, why can't I use the line below?
-        Field('topics', 'list:reference topic', requires=IS_IN_DB(db, 'topic.id', '%(name)s'))
+        # Here we would need multiple=True and a different interface (write and autocomplete?),
+        # but multiple=True seems to be broken.
+        Field('topics', 'list:reference topic', requires=IS_IN_DB(db, 'topic.id', '%(name)s', multiple=False))
     )
     if form.process().accepted:
         # We have to carry out the requests in the form.
