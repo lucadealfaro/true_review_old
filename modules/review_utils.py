@@ -9,3 +9,12 @@ def get_random_id(length=64):
 def get_clean_uuid():
     u = gluon_utils.web2py_uuid()
     return u.replace('-', '')
+
+def clean_int_list(s):
+    """Returns a list out of a request variable that is supposed to
+        contain a list."""
+    if isinstance(s, basestring):
+        return [int(s)]
+    elif isinstance(s, int):
+        return [s]
+    return [int(x) for x in s]

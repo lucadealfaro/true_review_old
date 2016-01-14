@@ -37,7 +37,7 @@ db.define_table('topic',
                 Field('creation_date', 'datetime', default=datetime.utcnow()),
                 Field('description', 'text'),
                 )
-db.topic.name.represent = lambda v, r: A(v, _href=URL('default', 'topic', args=[r.id]))
+db.topic.name.represent = lambda v, r: A(v, _href=URL('default', 'topic_index', args=[r.id]))
 db.topic.id.readable = db.topic.id.writable = False
 db.topic.creation_date.readable = db.topic.creation_date.writable = False
 

@@ -22,7 +22,7 @@ def index():
     return dict(grid=grid)
 
 
-def topic():
+def topic_index():
     """Displays a topic.
     We display both the top reviewers, truncated, and the list of all papers."""
     topic = db.topic(request.args(0)) or redirect(URL('default', 'index'))
@@ -38,11 +38,11 @@ def topic():
 
     links = []
     links.append(dict(header='',
-                      body=lambda r: A('Edit', _href=URL('default', 'edit_paper', args=[r.paper.paper_id], vars=dict(topic=topic.id)))))
+                      body=lambda r: A('Edit', _href=URL('default', 'edit_paper', args=[r.paper_id], vars=dict(topic=topic.id)))))
     grid = SQLFORM.grid(q,
         args=request.args[:1], # The first parameter is the topic number.
         orderby=~db.paper_in_topic.score,
-        fields=[db.paper.id, db.paper.title, db.paper.authors, db.paper.paper_id],
+        fields=[db.paper.id, db.paper.paper_id, db.paper.title, db.paper.authors],
         csv=False, details=False,
         links=links,
         # These all have to be done with special methods.
@@ -68,6 +68,7 @@ def edit_paper():
     of a paper to which the paper belongs by default."""
     paper = db(db.paper.paper_id == request.args(0)).select(orderby=~db.paper.start_date).first()
     is_create = paper is None
+    paper_topic = db.topic(request.vars.topic)
     # Creates the form.
     form = SQLFORM.factory(
         Field('title', default=None if is_create else paper.title),
@@ -75,8 +76,7 @@ def edit_paper():
         Field('abstract', 'text', default=None if is_create else text_store_read(paper.abstract)),
         Field('file', default=None if is_create else paper.file),
         # Massimo, why can't I use the line below?
-        # Field('topics', 'list:reference topic', default=[topic], requires=IS_IN_DB(db, 'topic.id', '%(name)s', multiple=(1,100)))
-        Field('topics', 'list:reference topic', default=[request.vars.topic])
+        Field('topics', 'list:reference topic', requires=IS_IN_DB(db, 'topic.id', '%(name)s'))
     )
     if form.process().accepted:
         # We have to carry out the requests in the form.
@@ -105,14 +105,14 @@ def edit_paper():
         # First, we close the topics to which the paper no longer belongs.
         previous_occurrences = db((db.paper_in_topic.paper_id == random_paper_id) &
                                   (db.paper_in_topic.end_date == None)).select()
+        topic_list = review_utils.clean_int_list(form.vars.topics)
         for t in previous_occurrences:
-            # Massimo, here I get an error because form.vars.topics is a string, but why is it a string rather than a list of references?
-            if t.topic not in form.vars.topics:
+            if t.topic not in topic_list:
                 t.update_record(end_date=now)
         # Second, for each new topic, searches.  If the paper has never been in that topic before,
         # it adds the paper to that topic.  Otherwise, it re-opens the previous tenure of the paper
         # in that topic.
-        for tid in form.vars.topics:
+        for tid in topic_list:
             last_occurrence = db((db.paper_in_topic.paper_id == random_paper_id) &
                                  (db.paper_in_topic.topic == tid)).select(orderby=~db.paper_in_topic.start_date).first()
             if last_occurrence is None:
@@ -133,7 +133,7 @@ def edit_paper():
         session.flash = T('The paper has been updated.')
         # If we were looking at a specific topic, goes back to it.
         if request.vars.topic is not None:
-            redirect(URL('default', 'topic', args=[request.vars.topic]))
+            redirect(URL('default', 'topic_index', args=[request.vars.topic]))
         else:
             redirect(URL('default', 'index'))
     return dict(form=form)
