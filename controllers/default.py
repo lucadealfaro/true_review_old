@@ -34,7 +34,9 @@ def topic_index():
                        ).select(orderby=~db.reviewer.reputation, limitby=(0, 10))
     q = ((db.paper_in_topic.topic == topic.id) &
          (db.paper_in_topic.paper_id == db.paper.paper_id) &
-         (db.paper.end_date == None))
+         (db.paper_in_topic.end_date == None) &
+         (db.paper.end_date == None)
+         )
 
     links = []
     links.append(dict(header='',
@@ -56,6 +58,7 @@ def topic_index():
                        _href=URL('default', 'edit_paper', vars=dict(topic=topic.id)))
     return dict(top_reviewers=top_reviewers,
                 grid=grid,
+                topic=topic,
                 add_paper_link=add_paper_link)
 
 
@@ -69,7 +72,7 @@ def edit_paper():
     of a paper to which the paper belongs by default."""
     paper = db(db.paper.paper_id == request.args(0)).select(orderby=~db.paper.start_date).first()
     is_create = paper is None
-    paper_topic = db.topic(request.vars.topic)
+    topic = db.topic(request.vars.topic)
     # Creates the form.
     form = SQLFORM.factory(
         Field('title', default=None if is_create else paper.title),
@@ -78,7 +81,7 @@ def edit_paper():
         Field('file', default=None if is_create else paper.file),
         # Here we would need multiple=True and a different interface (write and autocomplete?),
         # but multiple=True seems to be broken.
-        Field('topics', 'list:reference topic', requires=IS_IN_DB(db, 'topic.id', '%(name)s', multiple=False))
+        Field('topics', 'list:reference topic', default=[topic.id], requires=IS_IN_DB(db, 'topic.id', '%(name)s', multiple=False))
     )
     if form.process().accepted:
         # We have to carry out the requests in the form.
@@ -87,29 +90,49 @@ def edit_paper():
             # We have to come up with a new random id.
             random_paper_id = review_utils.get_random_id()
             abstract_id = text_store_write(form.vars.abstract)
+            # We write the paper.
+            db.paper.insert(paper_id=random_paper_id,
+                            title=form.vars.title,
+                            authors=form.vars.authors,
+                            abstract=abstract_id,
+                            file=form.vars.file,
+                            start_date=datetime.utcnow(),
+                            end_date=None
+                            )
         else:
-            # Closes the validity period of the previous instance of this paper.
-            paper.update_record(end_date=now)
             random_paper_id = paper.paper_id
+            # Checks if anything has changed about the paper, as opposed to the topics.
+            is_abstract_different = False
             abstract_id = paper.abstract
             if form.vars.abstract != text_store_read(paper.abstract):
-                text_store_write(form.vars.abstract, key=abstract_id)
-        # We write the paper.
-        db.paper.insert(paper_id=random_paper_id,
-                        title=form.vars.title,
-                        authors=form.vars.authors,
-                        abstract=abstract_id,
-                        file=form.vars.file,
-                        start_date=datetime.utcnow(),
-                        end_date=None
-                        )
+                abstract_id = text_store_write(form.vars.abstract)
+                is_abstract_different = True
+            if ((form.vars.title != paper.title) or
+                    (form.vars.authors != paper.authors) or
+                    is_abstract_different):
+                logger.info("The paper itself changed; moving to a new paper instance.")
+                # Closes the validity period of the previous instance of this paper.
+                paper.update_record(end_date=now)
+                # We write the paper.
+                db.paper.insert(paper_id=random_paper_id,
+                                title=form.vars.title,
+                                authors=form.vars.authors,
+                                abstract=abstract_id,
+                                file=form.vars.file,
+                                start_date=datetime.utcnow(),
+                                end_date=None
+                                )
+            else:
+                logger.info("The paper itself is unchanged.")
         # Then, we take care of the topics.
         # First, we close the topics to which the paper no longer belongs.
         previous_occurrences = db((db.paper_in_topic.paper_id == random_paper_id) &
                                   (db.paper_in_topic.end_date == None)).select()
         topic_list = review_utils.clean_int_list(form.vars.topics)
+        logger.info("topic_list: %r" % topic_list)
         for t in previous_occurrences:
             if t.topic not in topic_list:
+                logger.info("Removing paper from topic %r" % t.topic)
                 t.update_record(end_date=now)
         # Second, for each new topic, searches.  If the paper has never been in that topic before,
         # it adds the paper to that topic.  Otherwise, it re-opens the previous tenure of the paper
@@ -119,12 +142,14 @@ def edit_paper():
                                  (db.paper_in_topic.topic == tid)).select(orderby=~db.paper_in_topic.start_date).first()
             if last_occurrence is None:
                 # We need to insert.
+                logger.info("Adding paper to new topic %r" % tid)
                 db.paper_in_topic.insert(paper_id=random_paper_id,
                                          topic=tid,
                                          start_date=now)
             elif last_occurrence.end_date is not None:
                 # There was a previous occurrence, but it has now been closed.
                 # We reopen it.
+                logger.info("Reopening paper presence in topic %r" % tid)
                 db.paper_in_topic.insert(paper_id=random_paper_id,
                                          topic=tid,
                                          start_date=now,
