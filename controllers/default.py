@@ -40,12 +40,19 @@ def topic_index():
 
     links = []
     links.append(dict(header='',
+                      body=lambda r: A('View', _href=URL('default', 'view_paper',
+                                                         args=[r.paper_in_topic.paper_id], vars=dict(topic=topic.id)))))
+    links.append(dict(header='',
+                      body=lambda r: A('Versions', _href=URL('default', 'view_paper_versions',
+                                                            args=[r.paper_in_topic.paper_id]))))
+    links.append(dict(header='',
                       body=lambda r: A('Edit', _href=URL('default', 'edit_paper',
                                                          args=[r.paper_in_topic.paper_id], vars=dict(topic=topic.id)))))
     grid = SQLFORM.grid(q,
         args=request.args[:1], # The first parameter is the topic number.
         orderby=~db.paper_in_topic.score,
-        fields=[db.paper_in_topic.paper_id, db.paper.id, db.paper.paper_id, db.paper.title, db.paper.authors],
+        fields=[db.paper_in_topic.paper_id, db.paper.id, db.paper.paper_id, db.paper.title, db.paper.authors,
+                db.paper_in_topic.num_reviews, db.paper_in_topic.score],
         csv=False, details=False,
         links=links,
         # These all have to be done with special methods.
@@ -62,6 +69,45 @@ def topic_index():
                 add_paper_link=add_paper_link)
 
 
+def view_paper_versions():
+    # TODO
+    return dict()
+
+
+def view_paper():
+    """Views a paper, optionally focusing on a single topic in which the paper appears.
+    The latter facilitates doing the reviews.
+    Arguments: paper_id , the random paper_id.
+    This shows the latest copy of the paper."""
+    paper = db(db.paper.paper_id == request.args(0)).select().first()
+    paper_in_topic = None
+    topic = None
+    if request.vars.topic is not None:
+        paper_in_topic = db((db.paper_in_topic.paper_id == request.args(0)) &
+                            (db.paper_in_topic.topic == review_utils.safe_int(request.vars.topic)) &
+                            (db.paper_in_topic.end_date == None)).select().first()
+        topic = db(db.topic.id == request.args(0))
+    if paper is None:
+        session.flash = T('No such paper')
+        redirect(URL('default', 'index'))
+    form = SQLFORM(db.paper, record=paper, readonly=True)
+    # Link to do the review.
+    if paper_in_topic is not None:
+        review_links = [A('Review this paper in ', topic.name,
+                          _href=URL('default', 'do_review', args=[paper.id], vars=dict(topic=request.vars.topic)))]
+    else:
+        review_topics = db((db.paper_in_topic.paper_id == request.args(0)) &
+                           (db.paper_in_topic.end_date == None) &
+                           (db.paper_in_topic.topic == db.topic.id)).select()
+        review_links = [
+            A('Review this paper in ', r.topic.name,
+              _href=URL('default', 'do_review', args=[paper.id], vars=dict(topic=r.topic.id)))
+            for r in review_topics
+        ]
+    return dict(form=form, review_links=review_links)
+    # ---qui--- Come up with UI.
+
+@auth.requires_login()
 def edit_paper():
     """This is a temporary page, so that we can add papers to
     a series of topics.
@@ -69,7 +115,11 @@ def edit_paper():
     papers, and for importing from ArXiV.
     If args(0) is specified, it is the id of the paper to edit.
     If the variable 'topic' is specified, it is taken to be the topic id
-    of a paper to which the paper belongs by default."""
+    of a paper to which the paper belongs by default.
+
+    Note that I am assuming here that anyone can edit a paper.
+    """
+    # TODO: verify permissions.
     paper = db(db.paper.paper_id == request.args(0)).select(orderby=~db.paper.start_date).first()
     is_create = paper is None
     topic = db.topic(request.vars.topic)
@@ -164,6 +214,25 @@ def edit_paper():
         else:
             redirect(URL('default', 'index'))
     return dict(form=form)
+
+
+@auth.requires_login()
+def do_review():
+    """Performs the review of a paper.  The arguments are:
+    - paper_id : the actual paper the person read.
+    - paper_
+    """
+    # TODO: verify permissions.
+    old_paper_in_topic = db((db.paper_in_topic.paper_id == request.args(0)) &
+                            (db.paper_in_topic.topic == review_utils.safe_int(request.args(1))) &
+                            (db.paper_in_topic.end_date == None)
+                            ).select().first()
+    if old_paper_in_topic is None:
+        session.flash = T('No such paper!')
+        redirect(URL('default', 'index'))
+    form = SQLFORM.factory(
+        Field('Re')
+    )
 
 
 def user():

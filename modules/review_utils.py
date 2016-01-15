@@ -18,3 +18,10 @@ def clean_int_list(s):
     elif isinstance(s, int):
         return [s]
     return [int(x) for x in s]
+
+def safe_int(s):
+    """Returns an int if possible, otherwise None."""
+    try:
+        return int(s)
+    except Exception, e:
+        return None

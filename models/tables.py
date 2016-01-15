@@ -101,7 +101,7 @@ db.review_application.outcome.default = 0
 # author + paper form a key
 db.define_table('review',
                 Field('author', 'reference person'),
-                Field('paper', 'reference paper'),
+                Field('paper', 'reference paper'), # A review is of a specific paper instance.
                 Field('topic', 'reference topic'), # Strictly speaking useless as can be reconstructed.  Keep?
                 Field('start_date', 'datetime', default=datetime.utcnow()),
                 Field('end_date', 'datetime'),
