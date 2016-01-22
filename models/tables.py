@@ -9,6 +9,18 @@ def represent_date(v, r):
     f = datetime_validator
     return f.formatter(v)
 
+def get_email(u):
+    return '' if u is None else (
+        '' if u.email is None else
+        '<' + u.email + '>'
+    )
+
+def represent_author(v, r):
+    u = db.auth_user(v)
+    return T('N/A') if u is None else " ".join([u.first_name, u.last_name, get_email(u)])
+
+db.auth_user.format = '%(email)s'
+
 # All db fields of type "text" should in truth contain only the key to a gdb text entry.
 # Text is all stored in this table.
 # The keyval table can also be used to store random other things.
@@ -34,6 +46,7 @@ db.define_table('topic',
                 Field('name'),
                 Field('creation_date', 'datetime', default=datetime.utcnow()),
                 Field('description', 'text'),
+                format = '%(name)s'
                 )
 db.topic.name.represent = lambda v, r: A(v, _href=URL('default', 'topic_index', args=[r.id]))
 db.topic.id.readable = db.topic.id.writable = False
@@ -50,6 +63,7 @@ db.define_table('paper',
                 Field('file'), # This is either a pointer to GCS (or blobstore?), or a link to where the file can be found.
                 Field('start_date', 'datetime', default=datetime.utcnow()),
                 Field('end_date', 'datetime'), # If this is None, then the record is current.
+                format = '%(title)s'
                 )
 db.paper.id.readable = False
 db.paper.paper_id.readable = False
@@ -117,6 +131,7 @@ db.define_table('review',
                 Field('grade', 'double'), # Grade assigned by review.
                 Field('old_score', 'double'), # Score of the paper at the time the review is initially made.
                 )
+db.review.author.represent = represent_author
 db.review.author.writable = False
 db.review.paper_id.writable = False
 db.review.topic.writable = False
@@ -127,3 +142,5 @@ db.review.start_date.requires = datetime_validator
 db.review.end_date.requires = datetime_validator
 db.review.start_date.label = T('Last updated')
 db.review.content.represent = lambda v, r: text_store_read(int(v))
+db.review.grade.requires = IS_FLOAT_IN_RANGE(0, 10.0)
+db.review.grade.label = 'Grade [0..10]'

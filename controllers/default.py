@@ -144,7 +144,7 @@ def view_paper_in_topic():
     do_review_link = None
     doesnt_have_review = db((db.review.author == auth.user_id) &
                             (db.review.paper_id == paper.paper_id) &
-                            (db.review.topic == topic.id)).is_empty()
+                            (db.review.topic == topic.id)).isempty()
     if doesnt_have_review:
         do_review_link = A(T('Write a review'), _href=URL('default', 'do_review', args=[paper.id, topic.id]))
     paper_revisions = None
@@ -318,9 +318,16 @@ def do_review():
                         (db.review.topic == topic.id) &
                         (db.review.end_date == None)).select().first()
     # Sets some defaults.
+    logger.info("My user id: %r" % auth.user_id)
+    db.review.paper.writable = False
+    db.review.paper_id.readable = False
+    db.review.author.default = auth.user_id
     db.review.paper_id.default = paper.paper_id
     db.review.paper.default = paper.id
     db.review.topic.default = topic.id
+    db.review.start_date.label = T('Review date')
+    db.review.end_date.readable = False
+    db.review.useful_count.readable = False
     db.review.old_score.default = paper_in_topic.score
     # Creates the form for editing.
     form = SQLFORM(db.review, record=current_review)
