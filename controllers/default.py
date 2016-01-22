@@ -128,6 +128,8 @@ def view_paper_in_topic():
     # Link to actual version of paper reviewed, if different from current one.
     links.append(dict(header='Reviewed version',
                       body=lambda r: get_reviewed_paper(r)))
+    edit_review_link=A(T('Edit'), _href=URL('default', 'do_review', args=[paper.paper_id, topic.id]))
+    db.review.author.represent = lambda v, r: CAT(B('You'), SPAN('(', edit_review_link, ')')) if v == auth.user_id else v
     grid = SQLFORM.grid(q,
         args=request.args[:2],
         fields=[db.review.grade, db.review.useful_count, db.review.content,
@@ -137,9 +139,18 @@ def view_paper_in_topic():
         editable=False, deletable=False, create=False,
         maxtextlength=48,
         )
-    paper_revisions = A('Revisions', _href=URL('default', 'view_paper_revisions', args=[db.paper.paper_id]))
+    do_review_link = None
+    doesnt_have_review = db((db.review.author == current.person.id) &
+                            (db.review.paper_id == paper.paper_id) &
+                            (db.review.topic == topic.id)).is_empty()
+    if doesnt_have_review:
+        do_review_link = A(T('Write a review'), _href=URL('default', 'do_review', args=[paper.id, topic.id]))
+    paper_revisions = None
+    if db(db.paper.paper_id == request.args(0)).count() > 1:
+        paper_revisions = A('Revisions', _href=URL('default', 'view_paper_revisions', args=[db.paper.paper_id]))
     return dict(paper=paper, topic=topic,
                 paper_revisions=paper_revisions,
+                do_review_link=do_review_link,
                 form=form, grid=grid)
 
 
@@ -284,19 +295,37 @@ def edit_paper():
 def do_review():
     """Performs the review of a paper.  The arguments are:
     - paper_id : the actual paper the person read.
-    - paper_
+    - topic.id : the id of the topic.
     """
     # TODO: verify permissions.
-    old_paper_in_topic = db((db.paper_in_topic.paper_id == request.args(0)) &
-                            (db.paper_in_topic.topic == review_utils.safe_int(request.args(1))) &
-                            (db.paper_in_topic.end_date == None)
-                            ).select().first()
-    if old_paper_in_topic is None:
-        session.flash = T('No such paper!')
+    paper = db.paper(request.args(0))
+    topic = db.topic(request.args(1))
+    if paper is None or topic is None:
+        session.flash = T('No such paper')
         redirect(URL('default', 'index'))
-    form = SQLFORM.factory(
-        Field('Re')
-    )
+    # Checks whether the paper is currently in the topic.
+    paper_in_topic = db((db.paper_in_topic.paper_id == paper.paper_id) &
+                        (db.paper_in_topic.topic == topic.id) &
+                        (db.paper_in_topic.end_date == None)).select().first()
+    if paper_in_topic is None:
+        session.flash = T('The paper is not in the selected topic')
+        redirect(URL('default', 'index'))
+    # Fishes out the current review, if any.
+    current_review = db((db.review.author == current.person) &
+                        (db.review.paper_id == paper.paper_id) &
+                        (db.review.topic == topic.id) &
+                        (db.review.end_date == None)).select().first()
+    # Sets some defaults.
+    db.review.paper_id.default = paper.paper_id
+    db.review.paper.default = paper.id
+    db.review.topic.default = topic.id
+    db.review.old_score.default = paper_in_topic.score
+    # Creates the form for editing.
+    form = SQLFORM(db.review, record=current_review)
+    if form.process().accepted:
+        session.flash = T('Your review has been accepted.')
+        redirect(URL('default', 'view_paper_in_topic', args=[paper.paper_id, topic.id]))
+    return dict(form=form)
 
 
 def user():

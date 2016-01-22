@@ -40,6 +40,10 @@ db.define_table('person',
                 )
 db.person.name.represent = lambda v, r: A(v, _href=r.link)
 
+# Reads the current person.
+current.person = None
+if auth.user_id is not None:
+    current.person = db(db.person.email == auth.user.email).select().first()
 
 db.define_table('topic',
                 Field('name'),
@@ -117,17 +121,24 @@ db.review_application.outcome.default = 0
 
 # author + paper form a key
 db.define_table('review',
-                Field('author', 'reference person'),
+                Field('author', 'reference person', default=current.person),
                 Field('paper_id',), # Reference to the paper series of which this is a paper.
                 Field('paper', 'reference paper'), # A review is of a specific paper instance.
                 Field('topic', 'reference topic'), # Strictly speaking useless as can be reconstructed.  Keep?
                 Field('start_date', 'datetime', default=datetime.utcnow()),
                 Field('end_date', 'datetime'),
-                Field('content', 'text'),
-                Field('useful_count', 'integer'), # How many times it was found useful.
+                Field('content', 'text'), # Store pointer to text in other db.
+                Field('useful_count', 'integer', default=0), # How many times it was found useful.
                 Field('grade', 'double'), # Grade assigned by review.
                 Field('old_score', 'double'), # Score of the paper at the time the review is initially made.
                 )
+db.review.author.writable = False
+db.review.paper_id.writable = False
+db.review.topic.writable = False
+db.review.start_date.writable = db.review.end_date.writable = False
+db.review.useful_count.writable = False
+db.review.old_score.readable = db.review.old_score.writable = False
 db.review.start_date.requires = datetime_validator
 db.review.end_date.requires = datetime_validator
 db.review.start_date.label = T('Last updated')
+db.review.content.represent = lambda v, r: text_store_read(int(v))

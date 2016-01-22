@@ -1,0 +1,21 @@
+{{left_sidebar_enabled,right_sidebar_enabled=False,False}}
+{{extend 'layout.html'}}
+
+{{block header}}
+{{end}}
+
+<h1>Paper</h1>
+<h3>{{=topic.name}}</h3>
+{{=form}}
+
+{{if do_review_link:}}
+  <p>{{=do_review_link}}</p>
+{{pass}}
+
+{{if paper_revisions:}}
+  <p>{{=paper_revisions}}</p>
+{{pass}}
+
+<h2>Reviews</h2>
+{{=grid}}
+
