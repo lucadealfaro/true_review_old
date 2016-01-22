@@ -30,7 +30,7 @@ def topic_index():
     # We would better cache it, as it will be requested very often, but
     # for the moment we just produce it.
     top_reviewers = db((db.reviewer.topic == topic.id) &
-                       (db.reviewer.user == db.person.id)
+                       (db.reviewer.user == db.auth_user.id)
                        ).select(orderby=~db.reviewer.reputation, limitby=(0, 10))
     q = ((db.paper_in_topic.topic == topic.id) &
          (db.paper_in_topic.paper_id == db.paper.paper_id) &
@@ -38,10 +38,9 @@ def topic_index():
          (db.paper.end_date == None)
          )
 
+    db.paper.title.represent = lambda v, r: A(v, _href=URL('default', 'view_paper_in_topic',
+                                                           args=[r.paper_in_topic.paper_id, topic.id]))
     links = []
-    links.append(dict(header='',
-                      body=lambda r: A('View', _href=URL('default', 'view_paper_in_topic',
-                                                         args=[r.paper_in_topic.paper_id, topic.id]))))
     links.append(dict(header='',
                       body=lambda r: A('Versions', _href=URL('default', 'view_paper_versions',
                                                             args=[r.paper_in_topic.paper_id]))))
@@ -143,7 +142,7 @@ def view_paper_in_topic():
         maxtextlength=48,
         )
     do_review_link = None
-    doesnt_have_review = db((db.review.author == current.person.id) &
+    doesnt_have_review = db((db.review.author == auth.user_id) &
                             (db.review.paper_id == paper.paper_id) &
                             (db.review.topic == topic.id)).is_empty()
     if doesnt_have_review:
@@ -313,8 +312,8 @@ def do_review():
     if paper_in_topic is None:
         session.flash = T('The paper is not in the selected topic')
         redirect(URL('default', 'index'))
-    # Fishes out the current review, if any.
-    current_review = db((db.review.author == current.person) &
+    # Fishes out the current review, if any.person
+    current_review = db((db.review.author == auth.user_id) &
                         (db.review.paper_id == paper.paper_id) &
                         (db.review.topic == topic.id) &
                         (db.review.end_date == None)).select().first()
