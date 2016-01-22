@@ -40,8 +40,8 @@ def topic_index():
 
     links = []
     links.append(dict(header='',
-                      body=lambda r: A('View', _href=URL('default', 'view_paper',
-                                                         args=[r.paper_in_topic.paper_id], vars=dict(topic=topic.id)))))
+                      body=lambda r: A('View', _href=URL('default', 'view_paper_in_topic',
+                                                         args=[r.paper_in_topic.paper_id, topic.id]))))
     links.append(dict(header='',
                       body=lambda r: A('Versions', _href=URL('default', 'view_paper_versions',
                                                             args=[r.paper_in_topic.paper_id]))))
@@ -70,42 +70,106 @@ def topic_index():
 
 
 def view_paper_versions():
-    # TODO
-    return dict()
+    q = (db.paper.paper_id == request.args(0))
+    grid = SQLFORM.grid(q,
+        args=request.args[:1],
+        fields=[db.paper.title, db.paper.author, db.paper.file, db.paper.start_date, db.paper.end_date],
+        orderby=~db.paper.start_date,
+        editable=False, deletable=False, create=False,
+        details=True,
+        maxtextlength=32,
+        )
+    return dict(grid=grid)
 
 
-def view_paper():
-    """Views a paper, optionally focusing on a single topic in which the paper appears.
-    The latter facilitates doing the reviews.
-    Arguments: paper_id , the random paper_id.
-    This shows the latest copy of the paper."""
-    paper = db(db.paper.paper_id == request.args(0)).select().first()
-    paper_in_topic = None
-    topic = None
-    if request.vars.topic is not None:
-        paper_in_topic = db((db.paper_in_topic.paper_id == request.args(0)) &
-                            (db.paper_in_topic.topic == review_utils.safe_int(request.vars.topic)) &
-                            (db.paper_in_topic.end_date == None)).select().first()
-        topic = db(db.topic.id == request.args(0))
+def view_specific_paper_version():
+    """Displays a specific paper version.  Called by paper id."""
+    paper = db.paper(request.args(0))
     if paper is None:
         session.flash = T('No such paper')
         redirect(URL('default', 'index'))
     form = SQLFORM(db.paper, record=paper, readonly=True)
-    # Link to do the review.
-    if paper_in_topic is not None:
-        review_links = [A('Review this paper in ', topic.name,
-                          _href=URL('default', 'do_review', args=[paper.id], vars=dict(topic=request.vars.topic)))]
-    else:
-        review_topics = db((db.paper_in_topic.paper_id == request.args(0)) &
-                           (db.paper_in_topic.end_date == None) &
-                           (db.paper_in_topic.topic == db.topic.id)).select()
-        review_links = [
-            A('Review this paper in ', r.topic.name,
-              _href=URL('default', 'do_review', args=[paper.id], vars=dict(topic=r.topic.id)))
-            for r in review_topics
-        ]
-    return dict(form=form, review_links=review_links)
-    # ---qui--- Come up with UI.
+    all_versions_link = A('All versions', _href=URL('default', 'view_paper_versions', args=[paper.paper_id]))
+    return dict(form=form,
+                all_versions_link=all_versions_link)
+
+
+def view_paper_in_topic():
+    """Views a paper, as belonging to a specific topic.  This also gives access to all
+    the reviews for that paper. The latest version of the paper is shown, but each review
+    points to the version of the paper that was current then.  Arguments:
+    - paper_id
+    - topic id
+    """
+    paper = db((db.paper.paper_id == request.args(0)) &
+               (db.paper.end_date == None)).select().first()
+    topic = db((db.topic(request.args(1))))
+    form = SQLFORM(db.paper, record=paper, readonly=True)
+    # Retrieves the edit history of reviews.
+    def get_review_history(r):
+        review_history_len = db((db.review.paper_id == paper.paper_id) &
+                                (db.review.topic == topic.id) &
+                                (db.review.author == r.author)).count()
+        return '' if review_history_len < 2 else A(T('Edit history',
+                                                     _href=URL('default', 'review_history',
+                                                               args=[paper.paper_id, topic.id, r.author])))
+    # Retrieves the version of paper reviewed, if different from current one.
+    def get_reviewed_paper(r):
+        return 'Current' if r.paper == paper.id else A(T('View'),
+                                                _href=URL('default', 'view_specific_paper_version', args=[r.paper]))
+    # Grid of reviews.
+    q = ((db.review.paper_id == paper.paper_id) &
+         (db.review.topic == topic.id) &
+         (db.review.end_date == None))
+    links = []
+    # Link to review edit history if any.
+    links.append(dict(header='',
+                      body=lambda r: get_review_history(r)))
+    # Link to actual version of paper reviewed, if different from current one.
+    links.append(dict(header='Reviewed version',
+                      body=lambda r: get_reviewed_paper(r)))
+    grid = SQLFORM.grid(q,
+        args=request.args[:2],
+        fields=[db.review.grade, db.review.useful_count, db.review.content,
+                db.review.author, db.review.start_date],
+        links=links,
+        details=True,
+        editable=False, deletable=False, create=False,
+        maxtextlength=48,
+        )
+    paper_revisions = A('Revisions', _href=URL('default', 'view_paper_revisions', args=[db.paper.paper_id]))
+    return dict(paper=paper, topic=topic,
+                paper_revisions=paper_revisions,
+                form=form, grid=grid)
+
+
+def view_paper():
+    """Views a paper, allowing also reviews of that paper.  Arguments: paper_id , the random paper_id.
+    This shows the latest copy of the paper, and gives access to reviews and previous versions of the paper itself."""
+    paper = db((db.paper.paper_id == request.args(0)) &
+               (db.paper.end_date == None)).select().first()
+    if paper is None:
+        session.flash = T('No such paper')
+        redirect(URL('default', 'index'))
+    # Form for the paper.
+    form = SQLFORM(db.paper, record=paper, readonly=True)
+    # Link to see all versions.
+    version_link = A(T('All versions'), _href=URL('default', 'view_paper_versions', args=[paper.paper_id]))
+    # Grid of review forums.
+    q = ((db.paper_in_topic.paper_id == paper.paper_id) &
+         (db.paper_in_topic.topic == db.topic.id))
+    db.topic.name.represent = lambda v, r: A(v, _href=URL('default', 'view_paper_in_topic', args=[paper.paper_id, r.topic.id]))
+    grid = SQLFORM.grid(q,
+        args=request.args[:1],
+        fields=[db.topic.name, db.topic.id],
+        create=False, editable=False, deletable=False,
+        maxtextlength=48,
+        csv=False, details=False,
+        )
+    return dict(form=form,
+                version_link=version_link,
+                grid=grid)
+
 
 @auth.requires_login()
 def edit_paper():

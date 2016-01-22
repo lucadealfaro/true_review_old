@@ -1,5 +1,14 @@
 from datetime import datetime
 
+DATE_FORMAT = '%Y-%m-%d %H:%M %Z'
+datetime_validator = IS_LOCALIZED_DATETIME(timezone=pytz.timezone(user_timezone), format=DATE_FORMAT)
+FULL_DATE_FORMAT = '%Y-%m-%d %H:%M:%S %Z'
+full_datetime_validator = IS_LOCALIZED_DATETIME(timezone=pytz.timezone(user_timezone), format=FULL_DATE_FORMAT)
+
+def represent_date(v, r):
+    f = datetime_validator
+    return f.formatter(v)
+
 # All db fields of type "text" should in truth contain only the key to a gdb text entry.
 # Text is all stored in this table.
 # The keyval table can also be used to store random other things.
@@ -56,6 +65,12 @@ db.define_table('paper',
 db.paper.id.readable = False
 db.paper.paper_id.readable = False
 db.paper.abstract.represent = lambda v, r: text_store_read(int(v))
+db.paper.start_date.label = T("Submitted on")
+db.paper.start_date.label = T("Current until")
+db.paper.end_date.requires = datetime_validator
+db.paper.end_date.represent = lambda v, r: (T('Current') if v is None else represent_date(v, r))
+db.paper.start_date.requires = datetime_validator
+
 
 # Paper score in topic
 db.define_table('paper_in_topic',
@@ -67,6 +82,8 @@ db.define_table('paper_in_topic',
                 Field('end_date', 'datetime'), # If this is None, then the record is current.
                 )
 db.paper_in_topic.paper_id.readable = False
+db.paper.start_date.requires = datetime_validator
+db.paper.end_date.requires = datetime_validator
 
 # This table explains the current roles of a user in a venue.
 # The top question is: should this table be split into multiple separate tables,
@@ -101,6 +118,7 @@ db.review_application.outcome.default = 0
 # author + paper form a key
 db.define_table('review',
                 Field('author', 'reference person'),
+                Field('paper_id',), # Reference to the paper series of which this is a paper.
                 Field('paper', 'reference paper'), # A review is of a specific paper instance.
                 Field('topic', 'reference topic'), # Strictly speaking useless as can be reconstructed.  Keep?
                 Field('start_date', 'datetime', default=datetime.utcnow()),
@@ -110,3 +128,6 @@ db.define_table('review',
                 Field('grade', 'double'), # Grade assigned by review.
                 Field('old_score', 'double'), # Score of the paper at the time the review is initially made.
                 )
+db.review.start_date.requires = datetime_validator
+db.review.end_date.requires = datetime_validator
+db.review.start_date.label = T('Last updated')
