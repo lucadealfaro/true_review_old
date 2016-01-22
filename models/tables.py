@@ -30,21 +30,6 @@ def text_store_write(v, key=None):
         return kk
 
 
-db.define_table('person',
-                Field('email'), # This is the key
-                Field('name'), # Name to be used for display purposes.
-                Field('affiliation'),
-                Field('link', requires=IS_URL()), # Url associated with user profile
-                Field('blurb', 'text', requires=IS_LENGTH(250)), # This is a profile blurb shown together with the person.
-                # We should have really a more complete user profile, but this will suffice for now.
-                )
-db.person.name.represent = lambda v, r: A(v, _href=r.link)
-
-# Reads the current person.
-current.person = None
-if auth.user_id is not None:
-    current.person = db(db.person.email == auth.user.email).select().first()
-
 db.define_table('topic',
                 Field('name'),
                 Field('creation_date', 'datetime', default=datetime.utcnow()),
@@ -94,7 +79,7 @@ db.paper.end_date.requires = datetime_validator
 # for admins, reviewers, authors, etc?
 # Also it might mean lots of updates to the same table.
 db.define_table('reviewer',
-                Field('user', 'reference person'),
+                Field('user', db.auth_user, default=auth.user_id),
                 Field('topic', 'reference topic'),
                 Field('reputation', 'double'),
                 Field('is_reviewer', 'boolean'),
@@ -103,7 +88,7 @@ db.define_table('reviewer',
                 )
 
 db.define_table('review_application',
-                Field('user', 'reference person'),
+                Field('user', db.auth_user, default=auth.user_id),
                 Field('topic', 'reference topic'),
                 Field('statement', 'text'),
                 Field('outcome', 'integer')
@@ -121,7 +106,7 @@ db.review_application.outcome.default = 0
 
 # author + paper form a key
 db.define_table('review',
-                Field('author', 'reference person', default=current.person),
+                Field('author', db.auth_user, default=auth.user_id),
                 Field('paper_id',), # Reference to the paper series of which this is a paper.
                 Field('paper', 'reference paper'), # A review is of a specific paper instance.
                 Field('topic', 'reference topic'), # Strictly speaking useless as can be reconstructed.  Keep?

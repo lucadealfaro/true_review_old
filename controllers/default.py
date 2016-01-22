@@ -103,7 +103,10 @@ def view_paper_in_topic():
     """
     paper = db((db.paper.paper_id == request.args(0)) &
                (db.paper.end_date == None)).select().first()
-    topic = db((db.topic(request.args(1))))
+    topic = db.topic(request.args(1))
+    if paper is None or topic is None:
+        session.flash = T('No such paper.')
+        redirect(URL('default', 'index'))
     form = SQLFORM(db.paper, record=paper, readonly=True)
     # Retrieves the edit history of reviews.
     def get_review_history(r):

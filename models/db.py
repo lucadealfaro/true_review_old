@@ -98,7 +98,7 @@ response.form_label_separator = myconf.take('forms.separator')
 
 from gluon.tools import Auth, Service, PluginManager
 
-auth = Auth(gdb)
+auth = Auth(db)
 service = Service()
 plugins = PluginManager()
 
@@ -111,7 +111,10 @@ from plugin_timezone import tz_nice_detector_widget
 my_tz_nice_detector_widget = lambda field, value : tz_nice_detector_widget(field, value, autodetect=True)
 
 auth.settings.extra_fields['auth_user']= [
-  Field('user_timezone', 'string', widget=my_tz_nice_detector_widget),
+    Field('user_timezone', 'string', widget=my_tz_nice_detector_widget),
+    Field('user_affiliation', 'string'),
+    Field('link', 'string', requires=IS_URL()),
+    Field('blurb', 'text'),
 ]
 
 ## create all tables needed by auth if not custom tables
