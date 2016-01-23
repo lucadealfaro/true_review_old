@@ -41,16 +41,19 @@ def text_store_write(v, key=None):
         gdb.keyval.update_or_insert((gdb.keyval.id == kk), id=kk, content=v)
         return kk
 
+def represent_text_field(v, r):
+    return text_store_read(int(v))
 
 db.define_table('topic',
                 Field('name'),
                 Field('creation_date', 'datetime', default=datetime.utcnow()),
-                Field('description', 'text'),
+                Field('description', 'text'), # Pointer to text table.
                 format = '%(name)s'
                 )
 db.topic.name.represent = lambda v, r: A(v, _href=URL('default', 'topic_index', args=[r.id]))
 db.topic.id.readable = db.topic.id.writable = False
 db.topic.creation_date.readable = db.topic.creation_date.writable = False
+db.topic.description.represent = represent_text_field
 
 # A paper, which may belong to several topics, and can also be updated in time by its authors.
 db.define_table('paper',
@@ -67,7 +70,7 @@ db.define_table('paper',
                 )
 db.paper.id.readable = False
 db.paper.paper_id.readable = False
-db.paper.abstract.represent = lambda v, r: text_store_read(int(v))
+db.paper.abstract.represent = represent_text_field
 db.paper.start_date.label = T("Submitted on")
 db.paper.start_date.label = T("Current until")
 db.paper.end_date.requires = datetime_validator
@@ -141,6 +144,6 @@ db.review.old_score.readable = db.review.old_score.writable = False
 db.review.start_date.requires = datetime_validator
 db.review.end_date.requires = datetime_validator
 db.review.start_date.label = T('Last updated')
-db.review.content.represent = lambda v, r: text_store_read(int(v))
+db.review.content.represent = represent_text_field
 db.review.grade.requires = IS_FLOAT_IN_RANGE(0, 10.0)
 db.review.grade.label = 'Grade [0..10]'

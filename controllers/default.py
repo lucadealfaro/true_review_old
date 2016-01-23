@@ -12,14 +12,56 @@ def index():
     """ Serves the main page."""
     # Displays list of topics.
     q = db.topic
+    links=[]
+    if auth.user_id:
+        links.append(dict(header='',
+                          body=lambda r: A('Edit', _href=URL('default', 'edit_topic', args=[r.id]))))
+        links.append(dict(header='',
+                          body=lambda r: A('Delete', _href=URL('default', 'delete_topic', args=[r.id]))))
     grid = SQLFORM.grid(q,
         csv=False, details=True,
-        create=is_logged_in,
-        editable=is_logged_in,
+        create=False,
+        editable=False,
         deletable=is_logged_in,
         maxtextlength=48,
     )
-    return dict(grid=grid)
+    add_button = A(icon_add, 'Add topic', _class='btn btn_success',
+                    _href=URL('default', 'create_topic')) if auth.user_id else None
+    return dict(grid=grid, add_button=add_button)
+
+
+@auth.requires_login()
+def delete_topic():
+    """Deletion of a topic.  We would need to unlink from the topic all the papers that are in it.
+    Deletion should be possible only if there are no reviews. Otherwise we need to figure out
+    what to do; perhaps simply hide the topic from the main listing."""
+    return dict()
+
+
+@auth.requires_login()
+def create_topic():
+    form = SQLFORM(db.topic)
+    if form.validate().accepted:
+        db.topic.insert(name=form.vars.name,
+                        description=text_store_write(form.vars.description))
+        session.flash = T('The topic has been created')
+        redirect(URL('default', 'index'))
+    return dict(form=form)
+
+
+@auth.requires_login()
+def edit_topic():
+    """Allows editing of a topic.  The parameter is the topic id."""
+    topic = db.topic(request.args(0))
+    form = SQLFORM(db.topic, record=topic)
+    if form.validate().accepted:
+        db.topic.update_record(
+            name=form.vars.name,
+        )
+        text_store_write(form.vars.description, key=topic.description)
+        session.flash = T('The topic has been created')
+        redirect(URL('default', 'index'))
+    return dict(form=form)
 
 
 def topic_index():
@@ -298,6 +340,8 @@ def do_review():
     """Performs the review of a paper.  The arguments are:
     - paper_id : the actual paper the person read.
     - topic.id : the id of the topic.
+    If there is a current review, then lets the user edit that instead,
+    keeping track of the old review.
     """
     # TODO: verify permissions.
     paper = db.paper(request.args(0))
@@ -330,8 +374,23 @@ def do_review():
     db.review.useful_count.readable = False
     db.review.old_score.default = paper_in_topic.score
     # Creates the form for editing.
-    form = SQLFORM(db.review, record=current_review)
-    if form.process().accepted:
+    form = SQLFORM(db.review, record=current_review,)
+    if form.validate().accepted:
+        # We must write the review as a new review.
+        # First, we close the old review if any.
+        now = datetime.utcnow()
+        if current_review is not None:
+            current_review.update_record(end_date=now)
+        # Then, writes the current review.
+        db.review.insert(author=auth.user_id,
+                         paper_id=paper.paper_id,
+                         paper=paper.id,
+                         topic=topic.id,
+                         start_date=now,
+                         end_date=None,
+                         content=str(text_store_write(form.vars.content)),
+                         old_score=paper_in_topic.score
+                         )
         session.flash = T('Your review has been accepted.')
         redirect(URL('default', 'view_paper_in_topic', args=[paper.paper_id, topic.id]))
     return dict(form=form)
