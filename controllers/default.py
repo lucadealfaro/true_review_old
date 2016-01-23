@@ -19,13 +19,14 @@ def index():
         links.append(dict(header='',
                           body=lambda r: A('Delete', _href=URL('default', 'delete_topic', args=[r.id]))))
     grid = SQLFORM.grid(q,
-        csv=False, details=True,
+        csv=False, details=False,
+        links=links,
         create=False,
         editable=False,
-        deletable=is_logged_in,
+        deletable=False,
         maxtextlength=48,
     )
-    add_button = A(icon_add, 'Add topic', _class='btn btn_success',
+    add_button = A(icon_add, 'Add topic', _class='btn btn-success',
                     _href=URL('default', 'create_topic')) if auth.user_id else None
     return dict(grid=grid, add_button=add_button)
 
@@ -41,7 +42,7 @@ def delete_topic():
 @auth.requires_login()
 def create_topic():
     form = SQLFORM(db.topic)
-    if form.validate().accepted:
+    if form.validate():
         db.topic.insert(name=form.vars.name,
                         description=text_store_write(form.vars.description))
         session.flash = T('The topic has been created')
@@ -54,8 +55,9 @@ def edit_topic():
     """Allows editing of a topic.  The parameter is the topic id."""
     topic = db.topic(request.args(0))
     form = SQLFORM(db.topic, record=topic)
-    if form.validate().accepted:
-        db.topic.update_record(
+    form.vars.description = text_store_read(topic.description)
+    if form.validate():
+        topic.update_record(
             name=form.vars.name,
         )
         text_store_write(form.vars.description, key=topic.description)
@@ -375,7 +377,7 @@ def do_review():
     db.review.old_score.default = paper_in_topic.score
     # Creates the form for editing.
     form = SQLFORM(db.review, record=current_review,)
-    if form.validate().accepted:
+    if form.validate():
         # We must write the review as a new review.
         # First, we close the old review if any.
         now = datetime.utcnow()
