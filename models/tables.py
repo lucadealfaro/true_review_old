@@ -16,8 +16,14 @@ def get_email(u):
     )
 
 def represent_author(v, r):
-    u = db.auth_user(v)
-    return T('N/A') if u is None else " ".join([u.first_name, u.last_name, get_email(u)])
+    return format_author(db.auth_user(v))
+
+def format_author(u):
+    if u is None:
+        return T('N/A')
+    s = " ".join([u.first_name, u.last_name, get_email(u)])
+    return A(s, _href=u.link)
+
 
 db.auth_user.format = '%(email)s'
 
@@ -75,6 +81,10 @@ db.paper.start_date.label = T("Submitted on")
 db.paper.end_date.label = T("Current until")
 db.paper.end_date.represent = lambda v, r: (T('Current') if v is None else represent_date(v, r))
 db.paper.start_date.represent = represent_date
+
+def represent_specific_paper_version(pid):
+    paper = db.paper(pid)
+    return A(paper.title, _href=URL('default', 'view_specific_paper_version', args=[pid]))
 
 
 # Paper score in topic
@@ -147,3 +157,5 @@ db.review.start_date.label = T('Last updated')
 db.review.content.represent = represent_text_field
 db.review.grade.requires = IS_FLOAT_IN_RANGE(0, 10.0)
 db.review.grade.label = 'Grade [0..10]'
+db.review.paper_id.readable = False
+db.review.id.readable = False

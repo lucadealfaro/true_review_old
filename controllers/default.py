@@ -157,30 +157,33 @@ def view_paper_in_topic():
         review_history_len = db((db.review.paper_id == paper.paper_id) &
                                 (db.review.topic == topic.id) &
                                 (db.review.author == r.author)).count()
-        return '' if review_history_len < 2 else A(T('Edit history',
+        return '' if review_history_len < 2 else A(T('Review history'),
                                                      _href=URL('default', 'review_history',
-                                                               args=[paper.paper_id, topic.id, r.author])))
+                                                               args=[paper.paper_id, topic.id, r.author]))
     # Retrieves the version of paper reviewed, if different from current one.
     def get_reviewed_paper(r):
-        return 'Current' if r.paper == paper.id else A(T('View'),
-                                                _href=URL('default', 'view_specific_paper_version', args=[r.paper]))
+        if r.paper == paper.id:
+            return 'Current'
+        else:
+            return A(T('View'), _href=URL('default', 'view_specific_paper_version', args=[r.paper]))
     # Grid of reviews.
     q = ((db.review.paper_id == paper.paper_id) &
          (db.review.topic == topic.id) &
          (db.review.end_date == None))
     links = []
+    db.review.paper.readable = False
     # Link to review edit history if any.
     links.append(dict(header='',
                       body=lambda r: get_review_history(r)))
     # Link to actual version of paper reviewed, if different from current one.
     links.append(dict(header='Reviewed version',
                       body=lambda r: get_reviewed_paper(r)))
-    edit_review_link=A(T('Edit'), _href=URL('default', 'do_review', args=[paper.paper_id, topic.id]))
-    db.review.author.represent = lambda v, r: CAT(B('You'), SPAN('(', edit_review_link, ')')) if v == auth.user_id else v
+    edit_review_link=A(T('Edit'), _href=URL('default', 'do_review', args=[paper.id, topic.id]))
+    db.review.author.represent = lambda v, r: CAT(B('You'), ' ', SPAN('(', edit_review_link, ')')) if v == auth.user_id else v
     grid = SQLFORM.grid(q,
         args=request.args[:2],
         fields=[db.review.grade, db.review.useful_count, db.review.content,
-                db.review.author, db.review.start_date],
+                db.review.paper_id, db.review.paper, db.review.author, db.review.start_date],
         links=links,
         details=True,
         editable=False, deletable=False, create=False,
@@ -378,8 +381,9 @@ def do_review():
     db.review.useful_count.readable = False
     db.review.old_score.default = paper_in_topic.score
     # Creates the form for editing.
-    form = SQLFORM(db.review, record=current_review,)
+    form = SQLFORM(db.review, record=current_review)
     form.vars.author = auth.user_id
+    form.vars.content = None if current_review is None else text_store_read(current_review.content)
     if form.validate():
         # We must write the review as a new review.
         # First, we close the old review if any.
@@ -394,12 +398,38 @@ def do_review():
                          start_date=now,
                          end_date=None,
                          content=str(text_store_write(form.vars.content)),
-                         old_score=paper_in_topic.score
+                         old_score=paper_in_topic.score,
+                         grade=form.vars.grade,
                          )
         session.flash = T('Your review has been accepted.')
         redirect(URL('default', 'view_paper_in_topic', args=[paper.paper_id, topic.id]))
     return dict(form=form)
 
+
+def review_history():
+    """Shows the review history of a certain paper by a certain author.
+    The arguments are:
+    - paper_id
+    - topic id
+    - author
+    """
+    db.review.start_date.label = T('Review date')
+    db.review.content.label = T('Review')
+    db.review.paper.represent = lambda v, r: represent_specific_paper_version(v)
+    q = ((db.review.paper_id == request.args(0)) &
+         (db.review.topic == request.args(1)) &
+         (db.review.author == review_utils.safe_int(request.args(1))))
+    grid = SQLFORM.grid(q,
+        args=request.args[:3],
+        fields=[db.review.grade, db.review.useful_count, db.review.content,
+                db.review.paper, db.review.start_date],
+        details=False,
+        editable=False, deletable=False, create=False,
+        maxtextlength=48,
+        )
+    author = db.auth_user(request.args(2))
+    return dict(grid=grid,
+                author=author)
 
 def user():
     """
