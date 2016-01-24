@@ -72,10 +72,9 @@ db.paper.id.readable = False
 db.paper.paper_id.readable = False
 db.paper.abstract.represent = represent_text_field
 db.paper.start_date.label = T("Submitted on")
-db.paper.start_date.label = T("Current until")
-db.paper.end_date.requires = datetime_validator
+db.paper.end_date.label = T("Current until")
 db.paper.end_date.represent = lambda v, r: (T('Current') if v is None else represent_date(v, r))
-db.paper.start_date.requires = datetime_validator
+db.paper.start_date.represent = represent_date
 
 
 # Paper score in topic
@@ -134,6 +133,7 @@ db.define_table('review',
                 Field('grade', 'double'), # Grade assigned by review.
                 Field('old_score', 'double'), # Score of the paper at the time the review is initially made.
                 )
+db.review.author.label = T('Review author')
 db.review.author.represent = represent_author
 db.review.author.writable = False
 db.review.paper_id.writable = False

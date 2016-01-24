@@ -116,10 +116,11 @@ def view_paper_versions():
     q = (db.paper.paper_id == request.args(0))
     grid = SQLFORM.grid(q,
         args=request.args[:1],
-        fields=[db.paper.title, db.paper.author, db.paper.file, db.paper.start_date, db.paper.end_date],
+        fields=[db.paper.title, db.paper.authors, db.paper.file, db.paper.start_date],
         orderby=~db.paper.start_date,
         editable=False, deletable=False, create=False,
         details=True,
+        csv=False,
         maxtextlength=32,
         )
     return dict(grid=grid)
@@ -190,7 +191,8 @@ def view_paper_in_topic():
                             (db.review.paper_id == paper.paper_id) &
                             (db.review.topic == topic.id)).isempty()
     if doesnt_have_review:
-        do_review_link = A(T('Write a review'), _href=URL('default', 'do_review', args=[paper.id, topic.id]))
+        do_review_link = A(icon_add, T('Write a review'), _class='btn btn-success',
+                           _href=URL('default', 'do_review', args=[paper.id, topic.id]))
     paper_revisions = None
     if db(db.paper.paper_id == request.args(0)).count() > 1:
         paper_revisions = A('Revisions', _href=URL('default', 'view_paper_revisions', args=[db.paper.paper_id]))
@@ -377,6 +379,7 @@ def do_review():
     db.review.old_score.default = paper_in_topic.score
     # Creates the form for editing.
     form = SQLFORM(db.review, record=current_review,)
+    form.vars.author = auth.user_id
     if form.validate():
         # We must write the review as a new review.
         # First, we close the old review if any.
