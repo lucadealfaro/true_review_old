@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 # this file is released under public domain and you can use without limitations
+import urllib
+import urllib2
 
 from google.appengine.api import taskqueue
 import json
@@ -430,6 +432,61 @@ def review_history():
     author = db.auth_user(request.args(2))
     return dict(grid=grid,
                 author=author)
+
+
+def _get(url="", values=None, headers=None):
+    # HTTP GET to fetch from external URLs
+    """
+    :param url: str
+    :param values: dict
+    :param headers: dict
+    :return:dict
+    """
+    if not headers:
+        headers = {}
+    if not values:
+        values = {}
+    try:
+        data = urllib.urlencode(values)
+        url = url + "?" + data
+        req = urllib2.Request(url=url, headers=headers)
+        response = urllib2.urlopen(req)
+        result = response.read()
+    except urllib2.HTTPError as e:
+        logger.info("GET HTTP Error code: %r", e.code)
+        logger.info("GET HTTP Error details: %r", e.read())
+
+    except Exception, e:
+        logger.info("GET Other Error details: %r", e)
+        result = dict(query="Error", error=e)
+
+    return result
+
+def arxiv_records():
+    """Gets data from arXiv for given search term
+
+    Returns:
+
+    """
+    form = SQLFORM.factory(
+        Field('search_term'),
+        Field('num_results', label="No. of results")
+    )
+
+    if form.process().accepted:
+        url = "http://export.arxiv.org/api/query"
+        values = {}
+        values['search_query'] = "all:" + form.vars.search_term if not None else ""
+        values['start'] = 0
+        values['max_results'] = form.vars.num_results if not None else 1
+
+        data = _get(url,values=values) # XML data
+        form = data
+        return dict(form=form)
+
+    return dict(form=form)
+
+
 
 def user():
     """
