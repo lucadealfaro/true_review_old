@@ -91,6 +91,7 @@ def represent_specific_paper_version(pid):
 db.define_table('paper_in_topic',
                 Field('paper_id'),
                 Field('topic', 'reference topic'),
+                Field('is_primary', 'boolean'), # Is this the primary topic for the paper? If so it can be reviewed.
                 Field('num_reviews', 'integer', default=0), # We need to have this info fast, hence the denormalization.
                 Field('score', 'double', default=0),
                 Field('start_date', 'datetime', default=datetime.utcnow()),

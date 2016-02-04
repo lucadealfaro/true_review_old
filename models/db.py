@@ -111,8 +111,9 @@ from plugin_timezone import tz_nice_detector_widget
 my_tz_nice_detector_widget = lambda field, value : tz_nice_detector_widget(field, value, autodetect=True)
 
 auth.settings.extra_fields['auth_user']= [
+    Field('display_name', 'string', required=True), # Name to use in displaying reviewer.
     Field('user_timezone', 'string', widget=my_tz_nice_detector_widget),
-    Field('user_affiliation', 'string'),
+    Field('affiliation', 'string'),
     Field('link', 'string', requires=IS_URL()),
     Field('blurb', 'text'),
 ]
@@ -120,11 +121,11 @@ auth.settings.extra_fields['auth_user']= [
 ## create all tables needed by auth if not custom tables
 auth.define_tables(username=False, signature=False)
 
-## Don't bother with first and last names so far.
+## Don't bother with first and last names; they are not used uniformly in all cultures.
 auth.settings.table_user.first_name.readable = auth.settings.table_user.first_name.writable = False
 auth.settings.table_user.last_name.readable = auth.settings.table_user.last_name.writable = False
 auth.settings.table_user.user_timezone.label = T('Time zone')
-
+auth.settings.table_user.display_name.label = T('Display name')
 ## configure auth policy
 auth.settings.registration_requires_verification = False
 auth.settings.registration_requires_approval = False

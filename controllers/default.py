@@ -67,21 +67,37 @@ def edit_topic():
 
 
 def topic_index():
-    """Displays a topic.
-    We display both the top reviewers, truncated, and the list of all papers."""
+    """Displays a topic.  This is a simple method, as most information is provided
+    via included tables and/or AJAX."""
     topic = db.topic(request.args(0)) or redirect(URL('default', 'index'))
-    # Truncated list of top reviewers in this topic.
-    # We would better cache it, as it will be requested very often, but
-    # for the moment we just produce it.
-    top_reviewers = db((db.reviewer.topic == topic.id) &
-                       (db.reviewer.user == db.auth_user.id)
-                       ).select(orderby=~db.reviewer.reputation, limitby=(0, 10))
-    q = ((db.paper_in_topic.topic == topic.id) &
-         (db.paper_in_topic.paper_id == db.paper.paper_id) &
-         (db.paper_in_topic.end_date == None) &
-         (db.paper.end_date == None)
-         )
+    add_paper_link = A(icon_add, 'Add a paper', _class='btn btn-success',
+                       _href=URL('default', 'edit_paper', vars=dict(topic=topic.id)))
+    return dict(topic=topic,
+                add_paper_link=add_paper_link)
 
+
+def paper_topic_index():
+    """Grid containing the papers in a topic.
+    The grid is done so that it can be easily included in a more complex page.
+    The arguments are:
+    - topic_id (in path)
+    - all_papers=y (in query): if yes, then also papers that are not primary in the topic
+      will be included.
+    """
+    topic = db.topic(request.args(0)) or redirect(URL('default', 'index'))
+    if request.vars.all_papers == 'y':
+        q = ((db.paper_in_topic.topic == topic.id) &
+             (db.paper_in_topic.is_primary == True) &
+             (db.paper_in_topic.paper_id == db.paper.paper_id) &
+             (db.paper_in_topic.end_date == None) &
+             (db.paper.end_date == None)
+             )
+    else:
+        q = ((db.paper_in_topic.topic == topic.id) &
+             (db.paper_in_topic.paper_id == db.paper.paper_id) &
+             (db.paper_in_topic.end_date == None) &
+             (db.paper.end_date == None)
+             )
     db.paper.title.represent = lambda v, r: A(v, _href=URL('default', 'view_paper_in_topic',
                                                            args=[r.paper_in_topic.paper_id, topic.id]))
     links = []
@@ -92,7 +108,7 @@ def topic_index():
                       body=lambda r: A('Edit', _href=URL('default', 'edit_paper',
                                                          args=[r.paper_in_topic.paper_id], vars=dict(topic=topic.id)))))
     grid = SQLFORM.grid(q,
-        args=request.args[:1], # The first parameter is the topic number.
+        args=request.args[:1], # The first parameter is the topic id.
         orderby=~db.paper_in_topic.score,
         fields=[db.paper_in_topic.paper_id, db.paper.id, db.paper.paper_id, db.paper.title, db.paper.authors,
                 db.paper_in_topic.num_reviews, db.paper_in_topic.score],
@@ -104,12 +120,29 @@ def topic_index():
         deletable=False,
         maxtextlength=48,
     )
-    add_paper_link = A(icon_add, 'Add a paper', _class='btn btn-success',
-                       _href=URL('default', 'edit_paper', vars=dict(topic=topic.id)))
-    return dict(top_reviewers=top_reviewers,
-                grid=grid,
-                topic=topic,
-                add_paper_link=add_paper_link)
+    return dict(grid=grid)
+
+
+def reviewers_topic_index():
+    """Grid containing the reviewers in a topic.
+    The grid is done so that it can be easily included in a more complex page.
+    The arguments are:
+    - topic_id (in path)
+    """
+    topic = db.topic(request.args(0)) or redirect(URL('default', 'index'))
+    q = db((db.reviewer.topic == topic.id) &
+           (db.reviewer.user == db.auth_user.id))
+    grid = SQLFORM.grid(q,
+        args = request.args[:1], # First is topic_id
+        orderby=~db.reviewer.reputation,
+        fields=[db.reviewer.reputation, db.auth_user.display_name, db.auth_user.affiliation, db.auth_user.link],
+        csv=False, details=True,
+        create=False, editable=False, deletable=False,
+        maxtextlength=48,
+    )
+    return dict(grid=grid)
+
+
 
 
 def view_paper_versions():
