@@ -6,7 +6,7 @@
 
 <h1>Papers in {{=topic.name}}</h1>
 {{=add_paper_link}}
-{{=LOAD('default', 'paper_topic_index', args=[topic.id], ajax=True)}}
+{{=LOAD('default', 'paper_topic_index.load', args=[topic.id], ajax=True)}}
 
 <h2>Reviewers</h2>
-{{=LOAD('default', 'reviewers_topic_index', args=[topic.id], ajax=True)}}
+{{=LOAD('default', 'reviewers_topic_index.load', args=[topic.id], ajax=True)}}
