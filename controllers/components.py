@@ -12,35 +12,42 @@ def paper_topic_grid(topic_id, all_papers=False):
       will be included.
     """
     topic = db.topic(topic_id) or redirect(URL('default', 'index'))
+    fields = [db.paper_in_topic.paper_id, db.paper.id, db.paper.paper_id,
+              db.paper.title, db.paper.authors, db.paper_in_topic.is_primary]
+    orderby = db.paper.start_date,
+    links = []
     if all_papers:
         q = ((db.paper_in_topic.topic == topic.id) &
-             (db.paper_in_topic.is_primary == True) &
              (db.paper_in_topic.paper_id == db.paper.paper_id) &
              (db.paper_in_topic.end_date == None) &
              (db.paper.end_date == None)
              )
+        links.append(dict(header='',
+                          body=lambda r: (icon_primary_papers if r.paper_in_topic.is_primary else '')))
     else:
         q = ((db.paper_in_topic.topic == topic.id) &
              (db.paper_in_topic.paper_id == db.paper.paper_id) &
+             (db.paper_in_topic.is_primary == True) &
              (db.paper_in_topic.end_date == None) &
              (db.paper.end_date == None)
              )
-    db.paper.title.represent = lambda v, r: A(v, _href=URL('default', 'view_paper_in_topic',
+        fields.extend([db.paper_in_topic.num_reviews, db.paper_in_topic.score])
+        orderby = ~db.paper_in_topic.score,
+    db.paper.title.represent = lambda v, r: A(v, _href=URL('default', 'view_paper',
                                                            args=[r.paper_in_topic.paper_id, topic.id]))
-    links = []
-    links.append(dict(header='',
-                      body=lambda r: A('Versions', _href=URL('default', 'view_paper_versions',
-                                                            args=[r.paper_in_topic.paper_id]))))
-    links.append(dict(header='',
-                      body=lambda r: A('Edit', _href=URL('default', 'edit_paper',
-                                                         args=[r.paper_in_topic.paper_id], vars=dict(topic=topic.id)))))
+    # links.append(dict(header='',
+    #                   body=lambda r: A('Versions', _href=URL('default', 'view_paper_versions',
+    #                                                         args=[r.paper_in_topic.paper_id]))))
+    # links.append(dict(header='',
+    #                   body=lambda r: A('Edit', _href=URL('default', 'edit_paper',
+    #                                                      args=[r.paper_in_topic.paper_id], vars=dict(topic=topic.id)))))
     grid = SQLFORM.grid(q,
         args=request.args[:1], # The first parameter is the topic id.
-        orderby=~db.paper_in_topic.score,
-        fields=[db.paper_in_topic.paper_id, db.paper.id, db.paper.paper_id, db.paper.title, db.paper.authors,
-                db.paper_in_topic.num_reviews, db.paper_in_topic.score],
+        orderby=orderby,
+        fields=fields,
         csv=False, details=False,
         links=links,
+        links_placement='left',
         # These all have to be done with special methods.
         create=False,
         editable=False,

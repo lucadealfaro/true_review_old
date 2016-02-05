@@ -92,10 +92,6 @@ def topic_index():
     topic = db.topic(request.args(0)) or redirect(URL('default', 'index'))
     return dict(topic=topic)
 
-
-
-
-
 def view_paper_versions():
     q = (db.paper.paper_id == request.args(0))
     grid = SQLFORM.grid(q,

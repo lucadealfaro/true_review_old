@@ -80,7 +80,9 @@ db.paper.abstract.represent = represent_text_field
 db.paper.start_date.label = T("Submitted on")
 db.paper.end_date.label = T("Current until")
 db.paper.end_date.represent = lambda v, r: (T('Current') if v is None else represent_date(v, r))
+db.paper.end_date.requires = datetime_validator
 db.paper.start_date.represent = represent_date
+db.paper.start_date.requires = datetime_validator
 
 def represent_specific_paper_version(pid):
     paper = db.paper(pid)
@@ -92,14 +94,13 @@ db.define_table('paper_in_topic',
                 Field('paper_id'),
                 Field('topic', 'reference topic'),
                 Field('is_primary', 'boolean'), # Is this the primary topic for the paper? If so it can be reviewed.
-                Field('num_reviews', 'integer', default=0), # We need to have this info fast, hence the denormalization.
                 Field('score', 'double', default=0),
+                Field('num_reviews', 'integer', default=0), # We need to have this info fast, hence the denormalization.
                 Field('start_date', 'datetime', default=datetime.utcnow()),
                 Field('end_date', 'datetime'), # If this is None, then the record is current.
                 )
+db.paper_in_topic.is_primary.readable = db.paper_in_topic.is_primary.writable = False
 db.paper_in_topic.paper_id.readable = False
-db.paper.start_date.requires = datetime_validator
-db.paper.end_date.requires = datetime_validator
 
 # This table explains the current roles of a user in a venue.
 # The top question is: should this table be split into multiple separate tables,
