@@ -109,4 +109,12 @@ def time_nickname():
         d = d.replace(tzinfo=utc).astimezone(timezone_obj)
     return d.strftime('%b %d, %Y %I:%M %p')
 
-
+def parse_date(date_string):
+    """This function parses a UTC-format time string into a date."""
+    try:
+        d = dates.datetime.strptime(
+                date_string['date'], '%Y-%m-%dT%H:%M:%S.%f')
+    except Exception, e:
+        d = dates.datetime.strptime(
+                date_string['date'], '%Y-%m-%dT%H:%M:%S')
+    return d

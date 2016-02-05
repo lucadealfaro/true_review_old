@@ -101,6 +101,8 @@ from gluon.tools import Auth, Service, PluginManager
 auth = Auth(db)
 service = Service()
 plugins = PluginManager()
+# auth available also to modules.
+current.auth = auth
 
 # Long-lived logins and sessions.
 auth.settings.expiration = 3600 * 24 * 365 # seconds
