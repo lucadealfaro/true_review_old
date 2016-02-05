@@ -4,6 +4,7 @@
 from google.appengine.api import taskqueue
 import json
 import review_utils
+import reputation
 
 def dbupdate():
     return "ok"
@@ -73,7 +74,7 @@ def topic_index():
     # Truncated list of top reviewers in this topic.
     # We would better cache it, as it will be requested very often, but
     # for the moment we just produce it.
-    top_reviewers = db((db.reviewer.topic == topic.id) &
+    top_reviewers = db((db.reviewer.topic == topic.id) & 
                        (db.reviewer.user == db.auth_user.id)
                        ).select(orderby=~db.reviewer.reputation, limitby=(0, 10))
     q = ((db.paper_in_topic.topic == topic.id) &
@@ -91,6 +92,7 @@ def topic_index():
     links.append(dict(header='',
                       body=lambda r: A('Edit', _href=URL('default', 'edit_paper',
                                                          args=[r.paper_in_topic.paper_id], vars=dict(topic=topic.id)))))
+    logger.info("So far, so good.")
     grid = SQLFORM.grid(q,
         args=request.args[:1], # The first parameter is the topic number.
         orderby=~db.paper_in_topic.score,
@@ -104,6 +106,7 @@ def topic_index():
         deletable=False,
         maxtextlength=48,
     )
+    logger.info("Ready to go!")
     add_paper_link = A(icon_add, 'Add a paper', _class='btn btn-success',
                        _href=URL('default', 'edit_paper', vars=dict(topic=topic.id)))
     return dict(top_reviewers=top_reviewers,
@@ -392,16 +395,16 @@ def do_review():
             current_review.update_record(end_date=now)
         # Then, writes the current review.
         grade=form.vars.grade
-        db.review.insert(author=auth.user_id,
-                         paper_id=paper.paper_id,
-                         paper=paper.id,
-                         topic=topic.id,
-                         start_date=now,
-                         end_date=None,
-                         content=str(text_store_write(form.vars.content)),
-                         old_score=paper_in_topic.score,
-                         grade=grade,
-                         )
+        review_id = db.review.insert(author=auth.user_id,
+                                     paper_id=paper.paper_id,
+                                     paper=paper.id,
+                                     topic=topic.id,
+                                     start_date=now,
+                                     end_date=None,
+                                     content=str(text_store_write(form.vars.content)),
+                                     old_score=paper_in_topic.score,
+                                     grade=grade,
+                                 )
         # Update the quality estimate of this paper in this topic.
         n_reviews = paper_in_topic.num_reviews
         old_score = paper_in_topic.score
@@ -415,41 +418,24 @@ def do_review():
             new_score = (old_score * (n_reviews+1) - old_grade + grade) / (n_reviews+2)
         logger.info("Updating paper with new score = %r" % new_score);
         paper_in_topic.update_record(num_reviews=n_reviews, score=new_score)
-        
-        # Update reputation of this user (only if first review of this user).
-        if (current_review is None):
-            reviewer = db(db.reviewer.user==auth.user_id).select().first()
-            if reviewer is None:
-                # first review of this user on this topic!
-                new_id = db.reviewer.insert(user=auth.user_id,
-                                            topic=topic.id,
-                                            reputation=0,
-                                            is_reviewer=True,
-                                            is_author=False,
-                                            is_admin=False)
-                reviewer = db.reviewer[new_id]
-            new_reputation = reviewer.reputation + review_utils.reputation_atom(old_score, grade, new_score)
-            reviewer.update_record(reputation=new_reputation)
-            logger.info("Updating current user with new reputation = %r" % new_score);
-        # Update reputation of all other users who have reviewed this paper in this topic.
-        previous_reviewers = db( (db.review.paper_id == paper.paper_id) &
-                                 (db.review.topic == topic.id) &
-                                 (db.review.author != auth.user_id) &
-                                 (db.reviewer.user == db.review.author) ).select(db.reviewer.ALL, distinct=True)
-        for reviewer in previous_reviewers:
-            # the earliest review of this reviewer on this paper in this topic
-            effective_review = db ( (db.review.paper_id == paper.paper_id) &
-                                    (db.review.author == reviewer.user) ).select(
-                db.review.ALL, orderby=db.review.start_date).first()
-            old_reputation_boost = review_utils.reputation_atom(effective_review.old_score, 
-                                                   effective_review.grade, 
-                                                   old_score)
-            new_reputation_boost = review_utils.reputation_atom(effective_review.old_score, 
-                                                   effective_review.grade, 
-                                                   new_score)
-            new_reputation = reviewer.reputation - old_reputation_boost + new_reputation_boost
-            reviewer.update_record(reputation=new_reputation)
-            logger.info("Updating user %r with new reputation = %r" % reviewer.user, new_reputation);
+
+        # register the current user as a reviewer (if not already registered)
+        # -> this may be moved elsewhere and be subject to authorization <-
+        reviewer = db( (db.reviewer.user==auth.user_id) &
+                       (db.reviewer.topic==topic.id) ).select().first()
+        if reviewer is None:
+            # first review of this user on this topic!
+            new_id = db.reviewer.insert(user=auth.user_id,
+                                        topic=topic.id,
+                                        reputation=0,
+                                        is_reviewer=True,
+                                        is_author=False,
+                                        is_admin=False)
+
+        # this should happen in a separate task, after the current request
+        # has been handled and the insert/update queries committed
+        db.commit()
+        reputation.update_reputation(paper, topic, review_id, old_score, new_score)
 
         session.flash = T('Your review has been accepted.')
         redirect(URL('default', 'view_paper_in_topic', args=[paper.paper_id, topic.id]))

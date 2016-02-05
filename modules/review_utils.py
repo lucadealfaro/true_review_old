@@ -26,10 +26,4 @@ def safe_int(s):
     except Exception, e:
         return None
 
-def reputation_atom(old_score, grade, current_score):
-    """Returns the reputation boost due to having assigned [grade] to a paper
-       that at the time had score [old_score] 
-       and currently has score [current_score]."""
-    offset = 10
-    alpha = 0.5
-    return offset + alpha*(old_score-current_score)**2 - (1-alpha)*(grade-current_score)**2
+
