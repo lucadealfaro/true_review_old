@@ -14,7 +14,7 @@ def paper_topic_grid(topic_id, all_papers=False):
     topic = db.topic(topic_id) or redirect(URL('default', 'index'))
     fields = [db.paper_in_topic.paper_id, db.paper.id, db.paper.paper_id,
               db.paper.title, db.paper.authors, db.paper_in_topic.is_primary]
-    orderby = db.paper.start_date,
+    orderby = db.paper.start_date
     links = []
     if all_papers:
         q = ((db.paper_in_topic.topic == topic.id) &
@@ -22,19 +22,22 @@ def paper_topic_grid(topic_id, all_papers=False):
              (db.paper_in_topic.end_date == None) &
              (db.paper.end_date == None)
              )
+        db.paper.title.represent = lambda v, r: A(
+            icon_primary_paper if r.paper_in_topic.is_primary else icon_empty,
+                v, _href=URL('default', 'view_paper', args=[r.paper_in_topic.paper_id, topic.id]))
         links.append(dict(header='',
-                          body=lambda r: (icon_primary_papers if r.paper_in_topic.is_primary else '')))
+                          body=lambda r: (icon_primary_paper if r.paper_in_topic.is_primary else '')))
+
     else:
-        q = ((db.paper_in_topic.topic == topic.id) &
-             (db.paper_in_topic.paper_id == db.paper.paper_id) &
-             (db.paper_in_topic.is_primary == True) &
-             (db.paper_in_topic.end_date == None) &
-             (db.paper.end_date == None)
+        q = ((db.paper.primary_topic == topic_id) &
+             (db.paper.end_date == None) &
+             (db.paper.paper_id == db.paper_in_topic.paper_id) &
+             (db.paper_in_topic.end_date == None)
              )
         fields.extend([db.paper_in_topic.num_reviews, db.paper_in_topic.score])
-        orderby = ~db.paper_in_topic.score,
-    db.paper.title.represent = lambda v, r: A(v, _href=URL('default', 'view_paper',
-                                                           args=[r.paper_in_topic.paper_id, topic.id]))
+        orderby = ~db.paper_in_topic.score
+        db.paper.title.represent = lambda v, r: A(
+                v, _href=URL('default', 'view_paper', args=[r.paper_in_topic.paper_id, topic.id]))
     # links.append(dict(header='',
     #                   body=lambda r: A('Versions', _href=URL('default', 'view_paper_versions',
     #                                                         args=[r.paper_in_topic.paper_id]))))
@@ -47,7 +50,6 @@ def paper_topic_grid(topic_id, all_papers=False):
         fields=fields,
         csv=False, details=False,
         links=links,
-        links_placement='left',
         # These all have to be done with special methods.
         create=False,
         editable=False,
@@ -77,13 +79,13 @@ def paper_topic_index():
         all_papers_classes += ' disabled'
     else:
         primary_papers_classes += ' disabled'
-    button_all_papers = A(icon_all_papers, T('All papers'), _id='all_papers_button',
-                          cid=request.cid, # trapped load
+    button_all_papers = A(icon_all_paper, T('All papers'), _id='all_papers_button',
+                          cid=request.cid,  # trapped load
                           _class=all_papers_classes,
                           _href=URL('components', 'paper_topic_index',
                                     args=request.args, vars=all_paper_vars))
-    button_topic_papers = A(icon_primary_papers, T('Primary topic papers'), _id='primary_papers_button',
-                            cid=request.cid, # trapped load
+    button_topic_papers = A(icon_primary_paper, T('Primary topic papers'), _id='primary_papers_button',
+                            cid=request.cid,  # trapped load
                             _class=primary_papers_classes,
                             _href=URL('components', 'paper_topic_index',
                                       args=request.args, vars=topic_paper_vars))

@@ -119,9 +119,10 @@ def view_specific_paper_version():
 
 
 def view_paper():
-    """Views a paper, allowing also reviews of that paper.  Arguments: paper_id , the random paper_id.
-    This shows the latest copy of the paper, and gives access to reviews and previous versions of the paper itself."""
-
+    """Views a paper, including the details of the paper, and all the reviews.
+     Arguments:
+         - paper_id
+    """
 
 
     paper = db((db.paper.paper_id == request.args(0)) &

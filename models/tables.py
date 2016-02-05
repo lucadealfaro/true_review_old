@@ -68,6 +68,7 @@ db.define_table('paper',
                 # Note that we need to list authors here as we find them, as we have
                 # no guarantee that they are also system users.
                 Field('authors', 'list:string'), # There can be lots of authors.
+                Field('primary_topic', 'reference topic'), # Primary topic of the paper.
                 Field('abstract', 'text'), # Put the gdb id of the abstract here.
                 Field('file'), # This is either a pointer to GCS (or blobstore?), or a link to where the file can be found.
                 Field('start_date', 'datetime', default=datetime.utcnow()),
