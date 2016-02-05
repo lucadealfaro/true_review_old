@@ -22,9 +22,9 @@ def paper_topic_grid(topic_id, all_papers=False):
              (db.paper_in_topic.end_date == None) &
              (db.paper.end_date == None)
              )
-        db.paper.title.represent = lambda v, r: A(
-            icon_primary_paper if r.paper_in_topic.is_primary else icon_empty,
-                v, _href=URL('default', 'view_paper', args=[r.paper_in_topic.paper_id, topic.id]))
+        fields.extend([db.paper.primary_topic])
+        db.paper.primary_topic.represent = lambda v, r: '' if v == topic_id else v
+        db.paper.primary_topic.label = T('Primary topic (if different)')
         links.append(dict(header='',
                           body=lambda r: (icon_primary_paper if r.paper_in_topic.is_primary else '')))
 
@@ -36,8 +36,8 @@ def paper_topic_grid(topic_id, all_papers=False):
              )
         fields.extend([db.paper_in_topic.num_reviews, db.paper_in_topic.score])
         orderby = ~db.paper_in_topic.score
-        db.paper.title.represent = lambda v, r: A(
-                v, _href=URL('default', 'view_paper', args=[r.paper_in_topic.paper_id, topic.id]))
+    db.paper.title.represent = lambda v, r: A(v, _href=URL('default', 'view_paper',
+                                                           args=[r.paper_in_topic.paper_id, topic.id]))
     # links.append(dict(header='',
     #                   body=lambda r: A('Versions', _href=URL('default', 'view_paper_versions',
     #                                                         args=[r.paper_in_topic.paper_id]))))
