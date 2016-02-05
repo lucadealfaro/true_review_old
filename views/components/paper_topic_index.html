@@ -1,5 +1,7 @@
 <span>
-  {{=button_topic_papers}} {{=button_all_papers}} {{=button_add_paper}}
+  {{for b in button_list:}}
+    {{=b}}
+  {{pass}}
 </span>
 <div>
   {{=grid}}

@@ -59,10 +59,6 @@ def paper_topic_index():
     topic_id = request.args(0)
     all_papers = request.vars.all_papers == 'y'
     grid = paper_topic_grid(topic_id, all_papers=all_papers)
-    add_paper_link = ''
-    if access.is_logged_in():
-        add_paper_link = A(icon_add, 'Add a paper', _class='btn btn-success',
-                           _href=URL('default', 'edit_paper', vars=dict(topic=topic_id)))
     # Creates buttons to see all papers, or only the papers that are primary.
     all_paper_vars = request.vars.copy()
     all_paper_vars.update(dict(all_papers='y'))
@@ -74,20 +70,27 @@ def paper_topic_index():
         all_papers_classes += ' disabled'
     else:
         primary_papers_classes += ' disabled'
-    button_all_papers = A(T('All papers'), _id='all_papers_button',
+    button_all_papers = A(icon_all_papers, T('All papers'), _id='all_papers_button',
                           cid=request.cid, # trapped load
                           _class=all_papers_classes,
                           _href=URL('components', 'paper_topic_index',
                                     args=request.args, vars=all_paper_vars))
-    button_topic_papers = A(T('Primary topic papers'), _id='primary_papers_button',
+    button_topic_papers = A(icon_primary_papers, T('Primary topic papers'), _id='primary_papers_button',
                             cid=request.cid, # trapped load
                             _class=primary_papers_classes,
                             _href=URL('components', 'paper_topic_index',
                                       args=request.args, vars=topic_paper_vars))
+    button_list = [button_topic_papers, button_all_papers]
+    if access.is_logged_in():
+        pick_paper_review_link = A(icon_pick_review, T('Choose paper to review'),
+                                   _class='btn btn-primary',
+                                   _href=URL('default', 'pick_review', args=[topic_id]))
+        button_list.append(pick_paper_review_link)
+        add_paper_link = A(icon_add, 'Add a paper', _class='btn btn-danger',
+                           _href=URL('default', 'edit_paper', vars=dict(topic=topic_id)))
+        button_list.append(add_paper_link)
     return dict(grid=grid,
-                button_all_papers=button_all_papers,
-                button_topic_papers=button_topic_papers,
-                button_add_paper=add_paper_link)
+                button_list=button_list)
 
 
 def reviewers_topic_index():
