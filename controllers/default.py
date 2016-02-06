@@ -142,18 +142,33 @@ def edit_paper():
     # TODO: verify permissions.
     paper = db(db.paper.paper_id == request.args(0)).select(orderby=~db.paper.start_date).first()
     is_create = paper is None
-    topic = db.topic(request.vars.topic)
+    # If there is no topic,
     # Creates the form.
+    default_topic_id = paper.primary_topic
     form = SQLFORM.factory(
         Field('title', default=None if is_create else paper.title),
         Field('authors', 'list:string', default=None if is_create else paper.authors),
         Field('abstract', 'text', default=None if is_create else text_store_read(paper.abstract)),
         Field('file', default=None if is_create else paper.file),
-        # Here we would need multiple=True and a different interface (write and autocomplete?),
-        # but multiple=True seems to be broken.
-        Field('topics', 'list:reference topic', default=[topic.id], requires=IS_IN_DB(db, 'topic.id', '%(name)s', multiple=False))
+        Field('primary_topic', 'reference topic', default=default_topic_id, requires=IS_IN_DB(db, 'topic.id', '%(name)s')),
+        Field('secondary_topics'),
     )
-    if form.process().accepted:
+    def validate_paper_edit_form(form):
+        # Checks the names of the secondary topics.
+        primary_topic_id = form.vars.primary_topic
+        secondary_topics_raw_names = form.vars.secondary_topics.split(';')
+        secondary_topic_ids = []
+        for n in secondary_topics_raw_names:
+            nn = n.strip()
+            t = db(db.topic.name == nn).select().first()
+            if t is None:
+                vars.form.seconary_topics.error = T('The topic %r does not exist') % nn
+                break
+            else:
+                secondary_topic_ids.append(t.id)
+        form.vars.secondary_topic_ids = list(set(secondary_topic_ids) - {primary_topic_id})
+
+    if form.process(onvalidation=validate_paper_edit_form).accepted:
         # We have to carry out the requests in the form.
         now = datetime.utcnow()
         if is_create:

@@ -5,6 +5,8 @@
 {{end}}
 
 <h2>Paper</h2>
+{{=A(icon_edit, T('Edit paper'), _class='btn btn-primary',
+     _href=URL('default', 'edit_paper', args=[paper_id]))}}
 {{=LOAD('components', 'paper_info', args=[paper_id])}}
 
 <h2>Reviews</h2>
