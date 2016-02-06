@@ -123,31 +123,8 @@ def view_paper():
      Arguments:
          - paper_id
     """
-
-
-    paper = db((db.paper.paper_id == request.args(0)) &
-               (db.paper.end_date == None)).select().first()
-    if paper is None:
-        session.flash = T('No such paper')
-        redirect(URL('default', 'index'))
-    # Form for the paper.
-    form = SQLFORM(db.paper, record=paper, readonly=True)
-    # Link to see all versions.
-    version_link = A(T('All versions'), _href=URL('default', 'view_paper_versions', args=[paper.paper_id]))
-    # Grid of review forums.
-    q = ((db.paper_in_topic.paper_id == paper.paper_id) &
-         (db.paper_in_topic.topic == db.topic.id))
-    db.topic.name.represent = lambda v, r: A(v, _href=URL('default', 'view_paper_in_topic', args=[paper.paper_id, r.topic.id]))
-    grid = SQLFORM.grid(q,
-        args=request.args[:1],
-        fields=[db.topic.name, db.topic.id],
-        create=False, editable=False, deletable=False,
-        maxtextlength=48,
-        csv=False, details=False,
-        )
-    return dict(form=form,
-                version_link=version_link,
-                grid=grid)
+    return dict(paper_id=request.args(0),
+                topic_id=request.args(1))
 
 
 @auth.requires_login()

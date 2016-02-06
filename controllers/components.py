@@ -23,8 +23,8 @@ def paper_topic_grid(topic_id, all_papers=False):
              (db.paper.end_date == None)
              )
         fields.extend([db.paper.primary_topic])
-        db.paper.primary_topic.represent = lambda v, r: '' if v == topic_id else v
-        db.paper.primary_topic.label = T('Primary topic (if different)')
+        # db.paper.primary_topic.represent = lambda v, r: '' if v == topic_id else v
+        db.paper.primary_topic.label = T('Primary topic')
         links.append(dict(header='',
                           body=lambda r: (icon_primary_paper if r.paper_in_topic.is_primary else '')))
 
@@ -50,6 +50,7 @@ def paper_topic_grid(topic_id, all_papers=False):
         fields=fields,
         csv=False, details=False,
         links=links,
+        links_placement='left',
         # These all have to be done with special methods.
         create=False,
         editable=False,
@@ -102,7 +103,7 @@ def paper_topic_index():
                 button_list=button_list)
 
 
-def reviewers_topic_index():
+def reviewers_topic_grid():
     """Grid containing the reviewers in a topic.
     The grid is done so that it can be easily included in a more complex page.
     The arguments are:
@@ -123,7 +124,7 @@ def reviewers_topic_index():
     return grid
 
 
-def paper_review_index():
+def paper_review_grid():
     """Grid of reviews for a paper.
     The arguments are:
     - paper_id
@@ -133,11 +134,9 @@ def paper_review_index():
     topic_id = request.args(1)
     # If topic_id is None, then uses as topic_id the main topic of the paper.
     if topic_id is None:
-        r = db((db.paper_in_topic.paper_id == paper_id) &
-               (db.paper_in_topic.is_primary == True)).select().first()
-        if r is None:
-            raise HTTP(500)
-        topic_id = r.topic
+        paper = db((db.paper.paper_id == paper_id) &
+                   (db.paper.end_date == None)).select().first()
+        topic_id = paper.primary_topic
     q = ((db.review.paper_id == paper_id) &
          (db.review.topic == topic_id) &
          (db.review.end_date == None))
@@ -170,11 +169,25 @@ def paper_review_index():
         fields=[db.review.grade, db.review.useful_count, db.review.content,
                 db.review.paper_id, db.review.paper, db.review.author, db.review.start_date],
         links=links,
-        details=True,
+        orderby=~db.review.start_date,
+        details=True, csv=False,
         editable=False, deletable=False, create=False,
         maxtextlength=48,
         )
     return grid
+
+
+def paper_reviews():
+    """Returns a list of paper reviews, together if appropriate with a link
+    to add one more review."""
+    grid = paper_review_grid()
+    paper_id = request.args(0)
+    button_list = []
+    button_review = A(icon_add, T('Write a review'),
+                      _class='btn btn-danger',
+                      _href=URL('default', 'do_review', args=[paper_id]))
+    button_list.append(button_review)
+    return dict(grid=grid, button_list=button_list)
 
 
 def paper_info():
@@ -182,10 +195,17 @@ def paper_info():
         Arguments:
         - paper_id (in path)
         Optional:
+        - topic_id (in path)
         - id=pid (in query) where pid is the id of the paper in the version.
         - date=date (in query) shows the version that was active at a given date.
     """
     paper_id = request.args(0)
+    topic_id = request.args(1)
+    # If topic_id is None, then uses as topic_id the main topic of the paper.
+    if topic_id is None:
+        paper = db((db.paper.paper_id == paper_id) &
+                   (db.paper.end_date == None)).select().first()
+        topic_id = paper.primary_topic
     if request.vars.id is not None:
         paper = db(db.paper.id == id).select().first()
         paper_id = paper.paper_id # For consistency
@@ -198,6 +218,38 @@ def paper_info():
         # Selects last paper.
         paper = db((db.paper.paper_id == paper_id) &
                    (db.paper.end_date == None)).select().first()
-    # Returns a form for the paper.
-    form = SQLFORM(db.paper, record=paper, readonly=True)
-    return form
+    # Paper topics, score, and number of reviews.
+    all_topics = db((db.paper_in_topic.paper_id == paper_id) &
+                    (db.paper_in_topic.end_date == None) &
+                    (db.topic.id == db.paper_in_topic.topic)).select()
+    secondary_topics=[]
+    primary_topic_name = None
+    primary_topic = None
+    primary_paper_topic = None
+    for t in all_topics:
+        if t.paper_in_topic.is_primary:
+            primary_topic = t.topic
+            primary_paper_topic = t.paper_in_topic
+            primary_topic_name = represent_paper_topic(primary_topic.name, primary_topic)
+        else:
+            secondary_topics.append(represent_paper_topic(t.topic.name, t.topic))
+    topics_els = [T('Primary topic: '), primary_topic_name]
+    if len(secondary_topics) > 0:
+        topics_els.append(SPAN(T(' Secondary topics:'), ' ', _class="second_span"))
+        topics_els.append(secondary_topics[0])
+        for t in secondary_topics[1:]:
+            topics_els.extend([SPAN(', '), t])
+    topics_span = SPAN(*topics_els)
+    # Earliest, and latest dates.
+    latest_version_date = represent_date(paper.start_date, paper)
+    earliest_paper = db(db.paper.paper_id == paper_id).select(orderby=db.paper.start_date).first()
+    first_version_date = earliest_paper.start_date
+    return dict(paper=paper,
+                topics=topics_span,
+                first_version_date=first_version_date,
+                latest_version_date=latest_version_date,
+                abstract=text_store_read(paper.abstract),
+                score=primary_paper_topic.score if primary_paper_topic else None,
+                num_reviews=primary_paper_topic.num_reviews if primary_paper_topic else None,
+                )
+

@@ -56,7 +56,8 @@ db.define_table('topic',
                 Field('description', 'text'), # Pointer to text table.
                 format = '%(name)s'
                 )
-db.topic.name.represent = lambda v, r: A(v, _href=URL('default', 'topic_index', args=[r.id]))
+represent_paper_topic = lambda v, r: A(v, _href=URL('default', 'topic_index', args=[r.id]))
+db.topic.name.represent = represent_paper_topic
 db.topic.id.readable = db.topic.id.writable = False
 db.topic.creation_date.readable = db.topic.creation_date.writable = False
 db.topic.description.represent = represent_text_field
@@ -102,6 +103,8 @@ db.define_table('paper_in_topic',
                 )
 db.paper_in_topic.is_primary.readable = db.paper_in_topic.is_primary.writable = False
 db.paper_in_topic.paper_id.readable = False
+represent_paper_score = lambda v, r: "%.2f" % v
+db.paper_in_topic.score.represent = represent_paper_score
 
 # This table explains the current roles of a user in a venue.
 # The top question is: should this table be split into multiple separate tables,
@@ -146,7 +149,7 @@ db.define_table('review',
                 Field('grade', 'double'), # Grade assigned by review.
                 Field('old_score', 'double'), # Score of the paper at the time the review is initially made.
                 )
-db.review.author.label = T('Review author')
+db.review.author.label = T('Reviewer')
 db.review.author.represent = represent_author
 db.review.author.writable = False
 db.review.paper_id.writable = False
@@ -156,9 +159,10 @@ db.review.useful_count.writable = False
 db.review.old_score.readable = db.review.old_score.writable = False
 db.review.start_date.requires = datetime_validator
 db.review.end_date.requires = datetime_validator
-db.review.start_date.label = T('Last updated')
+db.review.start_date.label = T('Review date')
 db.review.content.represent = represent_text_field
 db.review.grade.requires = IS_FLOAT_IN_RANGE(0, 10.0)
 db.review.grade.label = 'Grade [0..10]'
 db.review.paper_id.readable = False
 db.review.id.readable = False
+db.review.content.label = T('Review')

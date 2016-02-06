@@ -4,10 +4,8 @@
 {{block header}}
 {{end}}
 
-<h1>Paper</h1>
-{{=form}}
+<h2>Paper</h2>
+{{=LOAD('components', 'paper_info', args=[paper_id])}}
 
-<p>{{=version_link}}</p>
-
-{{=grid}}
-
+<h2>Reviews</h2>
+{{=LOAD('components', 'paper_reviews', args=[paper_id, topic_id])}}
