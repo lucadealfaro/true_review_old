@@ -266,63 +266,7 @@ def do_review():
     If there is a current review, then lets the user edit that instead,
     keeping track of the old review.
     """
-    # TODO: verify permissions.
-    paper = db((db.paper.paper_id == request.args(0)) &
-               (db.paper.end_date == None)).select().first()
-    topic = db.topic(request.args(1))
-    if topic is None:
-        topic = db.topic(paper.primary_topic)
-    if paper is None or topic is None:
-        session.flash = T('No such paper')
-        redirect(URL('default', 'index'))
-    # Checks whether the paper is currently in the topic.
-    paper_in_topic = db((db.paper_in_topic.paper_id == paper.paper_id) &
-                        (db.paper_in_topic.topic == topic.id) &
-                        (db.paper_in_topic.end_date == None)).select().first()
-    if paper_in_topic is None:
-        session.flash = T('The paper is not in the selected topic')
-        redirect(URL('default', 'index'))
-    # Fishes out the current review, if any.person
-    current_review = db((db.review.author == auth.user_id) &
-                        (db.review.paper_id == paper.paper_id) &
-                        (db.review.topic == topic.id) &
-                        (db.review.end_date == None)).select().first()
-    # Sets some defaults.
-    logger.info("My user id: %r" % auth.user_id)
-    db.review.paper.writable = False
-    db.review.paper_id.readable = False
-    db.review.author.default = auth.user_id
-    db.review.paper_id.default = paper.paper_id
-    db.review.paper.default = paper.id
-    db.review.topic.default = topic.id
-    db.review.start_date.label = T('Review date')
-    db.review.end_date.readable = False
-    db.review.useful_count.readable = False
-    db.review.old_score.default = paper_in_topic.score
-    # Creates the form for editing.
-    form = SQLFORM(db.review, record=current_review)
-    form.vars.author = auth.user_id
-    form.vars.content = None if current_review is None else text_store_read(current_review.content)
-    if form.validate():
-        # We must write the review as a new review.
-        # First, we close the old review if any.
-        now = datetime.utcnow()
-        if current_review is not None:
-            current_review.update_record(end_date=now)
-        # Then, writes the current review.
-        db.review.insert(author=auth.user_id,
-                         paper_id=paper.paper_id,
-                         paper=paper.id,
-                         topic=topic.id,
-                         start_date=now,
-                         end_date=None,
-                         content=str(text_store_write(form.vars.content)),
-                         old_score=paper_in_topic.score,
-                         grade=form.vars.grade,
-                         )
-        session.flash = T('Your review has been accepted.')
-        redirect(URL('default', 'view_paper', args=[paper.paper_id]))
-    return dict(form=form)
+    return dict(paper_id=request.args(0), topic_id=request.args(1))
 
 
 def review_history():

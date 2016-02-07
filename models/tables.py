@@ -166,3 +166,4 @@ db.review.grade.label = 'Grade [0..10]'
 db.review.paper_id.readable = False
 db.review.id.readable = False
 db.review.content.label = T('Review')
+db.review.end_date.readable = False

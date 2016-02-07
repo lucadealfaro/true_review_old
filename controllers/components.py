@@ -155,8 +155,10 @@ def paper_review_grid():
                                                      _href=URL('default', 'review_history',
                                                                args=[paper_id, topic_id, r.author]))
     # Retrieves the version of paper reviewed, if different from current one.
+    current_paper = db((db.paper.paper_id == paper_id) &
+                       (db.paper.end_date == None)).select().first()
     def get_reviewed_paper(r):
-        if r.paper == paper_id:
+        if r.paper == current_paper.id:
             return 'Current'
         else:
             return A(T('View'), _href=URL('default', 'view_specific_paper_version', args=[r.paper]))
@@ -168,7 +170,7 @@ def paper_review_grid():
     # Link to actual version of paper reviewed, if different from current one.
     links.append(dict(header='Reviewed version',
                       body=lambda r: get_reviewed_paper(r)))
-    edit_review_link=A(T('Edit'), _href=URL('default', 'do_review', args=[paper_id, topic_id]))
+    edit_review_link=A(T('Edit'), cid=request.cid, _href=URL('components', 'do_review', args=[paper_id, topic_id]))
     db.review.author.represent = lambda v, r: CAT(B('You'), ' ', SPAN('(', edit_review_link, ')')) if v == auth.user_id else v
     grid = SQLFORM.grid(q,
         args=request.args[:2],
@@ -189,10 +191,15 @@ def paper_reviews():
     grid = paper_review_grid()
     paper_id = request.args(0)
     button_list = []
-    button_review = A(icon_add, T('Write a review'),
-                      _class='btn btn-danger',
-                      _href=URL('default', 'do_review', args=[paper_id]))
-    button_list.append(button_review)
+    if auth.user_id is not None:
+        # We let a user add a review only if it has not written one already.
+        no_user_review = db((db.review.author == auth.user_id) &
+                            (db.review.paper_id == paper_id)).isempty()
+        if no_user_review:
+            button_review = A(icon_add, T('Write a review'),
+                              _class='btn btn-danger',
+                              _href=URL('default', 'do_review', args=[paper_id]))
+            button_list.append(button_review)
     return dict(grid=grid, button_list=button_list)
 
 
@@ -259,3 +266,68 @@ def paper_info():
                 num_reviews=primary_paper_topic.num_reviews if primary_paper_topic else None,
                 )
 
+@auth.requires_login()
+def do_review():
+    """Performs the review of a paper.  The arguments are:
+    - paper_id : the actual paper the person read.
+    - topic.id : the id of the topic.
+    If there is a current review, then lets the user edit that instead,
+    keeping track of the old review.
+    """
+    # TODO: verify permissions.
+    paper = db((db.paper.paper_id == request.args(0)) &
+               (db.paper.end_date == None)).select().first()
+    topic = db.topic(request.args(1))
+    if topic is None:
+        topic = db.topic(paper.primary_topic)
+    if paper is None or topic is None:
+        session.flash = T('No such paper')
+        redirect(URL('default', 'index'))
+    # Checks whether the paper is currently in the topic.
+    paper_in_topic = db((db.paper_in_topic.paper_id == paper.paper_id) &
+                        (db.paper_in_topic.topic == topic.id) &
+                        (db.paper_in_topic.end_date == None)).select().first()
+    if paper_in_topic is None:
+        session.flash = T('The paper is not in the selected topic')
+        redirect(URL('default', 'index'))
+    # Fishes out the current review, if any.person
+    current_review = db((db.review.author == auth.user_id) &
+                        (db.review.paper_id == paper.paper_id) &
+                        (db.review.topic == topic.id) &
+                        (db.review.end_date == None)).select().first()
+    # Sets some defaults.
+    logger.info("My user id: %r" % auth.user_id)
+    db.review.paper.writable = False
+    db.review.paper_id.readable = False
+    db.review.author.default = auth.user_id
+    db.review.paper_id.default = paper.paper_id
+    db.review.paper.default = paper.id
+    db.review.topic.default = topic.id
+    db.review.start_date.label = T('Review date')
+    db.review.end_date.readable = False
+    db.review.useful_count.readable = False
+    db.review.old_score.default = paper_in_topic.score
+    # Creates the form for editing.
+    form = SQLFORM(db.review, record=current_review)
+    form.vars.author = auth.user_id
+    form.vars.content = None if current_review is None else text_store_read(current_review.content)
+    if form.validate():
+        # We must write the review as a new review.
+        # First, we close the old review if any.
+        now = datetime.utcnow()
+        if current_review is not None:
+            current_review.update_record(end_date=now)
+        # Then, writes the current review.
+        db.review.insert(author=auth.user_id,
+                         paper_id=paper.paper_id,
+                         paper=paper.id,
+                         topic=topic.id,
+                         start_date=now,
+                         end_date=None,
+                         content=str(text_store_write(form.vars.content)),
+                         old_score=paper_in_topic.score,
+                         grade=form.vars.grade,
+                         )
+        session.flash = T('Your review has been accepted.')
+        redirect(URL('default', 'view_paper', args=[paper.paper_id]))
+    return form

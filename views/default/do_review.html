@@ -5,4 +5,4 @@
 {{end}}
 
 <h1>Enter Review</h1>
-{{=form}}
+{{=LOAD('components', 'do_review', args=[paper_id, topic_id])}}
