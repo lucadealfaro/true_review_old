@@ -258,17 +258,6 @@ def edit_paper():
     return dict(form=form, is_create=is_create)
 
 
-@auth.requires_login()
-def do_review():
-    """Performs the review of a paper.  The arguments are:
-    - paper_id : the actual paper the person read.
-    - topic.id : the id of the topic.
-    If there is a current review, then lets the user edit that instead,
-    keeping track of the old review.
-    """
-    return dict(paper_id=request.args(0), topic_id=request.args(1))
-
-
 def review_history():
     """Shows the review history of a certain paper by a certain author.
     The arguments are:

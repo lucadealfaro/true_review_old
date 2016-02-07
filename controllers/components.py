@@ -267,7 +267,7 @@ def paper_reviews():
         if no_user_review:
             button_review = A(icon_add, T('Write a review'),
                               _class='btn btn-danger', cid=request.cid,
-                              _href=URL('default', 'do_review', args=[paper_id]))
+                              _href=URL('components', 'do_review', args=[paper_id]))
             button_list.append(button_review)
         else:
             button_your_review = A(icon_your_review, T('Your review'),
