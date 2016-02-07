@@ -242,7 +242,6 @@ def paper_review_grid():
     links.append(dict(header='Reviewed version',
                       body=lambda r: get_reviewed_paper(r)))
     edit_review_link=A(T('Edit'), cid=request.cid, _href=URL('components', 'do_review', args=[paper_id, topic_id]))
-    db.review.author.represent = lambda v, r: CAT(B('You'), ' ', SPAN('(', edit_review_link, ')')) if v == auth.user_id else v
     grid = SQLFORM.grid(q,
         args=request.args[:2],
         fields=[db.review.grade, db.review.useful_count, db.review.content,
