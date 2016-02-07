@@ -144,7 +144,7 @@ def edit_paper():
     is_create = paper is None
     # If there is no topic,
     # Creates the form.
-    default_topic_id = paper.primary_topic
+    default_topic_id = paper.primary_topic if paper else request.vars.topic
     form = SQLFORM.factory(
         Field('title', default=None if is_create else paper.title),
         Field('authors', 'list:string', default=None if is_create else paper.authors),
@@ -156,17 +156,20 @@ def edit_paper():
     def validate_paper_edit_form(form):
         # Checks the names of the secondary topics.
         primary_topic_id = form.vars.primary_topic
-        secondary_topics_raw_names = form.vars.secondary_topics.split(';')
         secondary_topic_ids = []
-        for n in secondary_topics_raw_names:
-            nn = n.strip()
-            t = db(db.topic.name == nn).select().first()
-            if t is None:
-                vars.form.seconary_topics.error = T('The topic %r does not exist') % nn
-                break
-            else:
-                secondary_topic_ids.append(t.id)
-        form.vars.secondary_topic_ids = list(set(secondary_topic_ids) - {primary_topic_id})
+        if form.vars.secondary_topics is not None:
+            secondary_topics_raw_names = form.vars.secondary_topics.split(';')
+            for n in secondary_topics_raw_names:
+                nn = n.strip()
+                if nn != '':
+                    t = db(db.topic.name == nn).select().first()
+                    if t is None:
+                        form.errors.secondary_topics = T('The topic %r does not exist') % nn
+                        return form
+                    else:
+                        secondary_topic_ids.append(t.id)
+            form.vars.secondary_topic_ids = list(set(secondary_topic_ids) - {primary_topic_id})
+        return form
 
     if form.process(onvalidation=validate_paper_edit_form).accepted:
         # We have to carry out the requests in the form.
@@ -181,6 +184,7 @@ def edit_paper():
                             authors=form.vars.authors,
                             abstract=abstract_id,
                             file=form.vars.file,
+                            primary_topic=form.vars.primary_topic,
                             start_date=datetime.utcnow(),
                             end_date=None
                             )
@@ -204,25 +208,26 @@ def edit_paper():
                                 authors=form.vars.authors,
                                 abstract=abstract_id,
                                 file=form.vars.file,
+                                primary_topic=form.vars.primary_topic,
                                 start_date=datetime.utcnow(),
                                 end_date=None
                                 )
             else:
                 logger.info("The paper itself is unchanged.")
         # Then, we take care of the topics.
+        new_topics = set({form.vars.primary_topic}) | set(form.vars.secondary_topic_ids)
+        logger.info("new topics: %r" % new_topics)
         # First, we close the topics to which the paper no longer belongs.
         previous_occurrences = db((db.paper_in_topic.paper_id == random_paper_id) &
                                   (db.paper_in_topic.end_date == None)).select()
-        topic_list = review_utils.clean_int_list(form.vars.topics)
-        logger.info("topic_list: %r" % topic_list)
         for t in previous_occurrences:
-            if t.topic not in topic_list:
+            if t.topic not in new_topics:
                 logger.info("Removing paper from topic %r" % t.topic)
                 t.update_record(end_date=now)
         # Second, for each new topic, searches.  If the paper has never been in that topic before,
         # it adds the paper to that topic.  Otherwise, it re-opens the previous tenure of the paper
         # in that topic.
-        for tid in topic_list:
+        for tid in new_topics:
             last_occurrence = db((db.paper_in_topic.paper_id == random_paper_id) &
                                  (db.paper_in_topic.topic == tid)).select(orderby=~db.paper_in_topic.start_date).first()
             if last_occurrence is None:
@@ -230,6 +235,7 @@ def edit_paper():
                 logger.info("Adding paper to new topic %r" % tid)
                 db.paper_in_topic.insert(paper_id=random_paper_id,
                                          topic=tid,
+                                         is_primary = tid == form.vars.primary_topic,
                                          start_date=now)
             elif last_occurrence.end_date is not None:
                 # There was a previous occurrence, but it has now been closed.
@@ -237,6 +243,7 @@ def edit_paper():
                 logger.info("Reopening paper presence in topic %r" % tid)
                 db.paper_in_topic.insert(paper_id=random_paper_id,
                                          topic=tid,
+                                         is_primary = tid == form.vars.primary_topic,
                                          start_date=now,
                                          num_reviews=last_occurrence.num_reviews,
                                          score=last_occurrence.score,
@@ -248,7 +255,7 @@ def edit_paper():
             redirect(URL('default', 'topic_index', args=[request.vars.topic]))
         else:
             redirect(URL('default', 'index'))
-    return dict(form=form)
+    return dict(form=form, is_create=is_create)
 
 
 @auth.requires_login()

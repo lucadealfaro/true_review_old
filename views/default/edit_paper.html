@@ -4,5 +4,10 @@
 {{block header}}
 {{end}}
 
-<h1>Edit Paper</h1>
+{{if is_create:}}
+  <h1>Add Paper</h1>
+{{else:}}
+  <h1>Edit Paper</h1>
+{{pass}}
+
 {{=form}}

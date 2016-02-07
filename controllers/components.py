@@ -20,18 +20,22 @@ def paper_topic_grid(topic_id, all_papers=False):
         q = ((db.paper_in_topic.topic == topic.id) &
              (db.paper_in_topic.paper_id == db.paper.paper_id) &
              (db.paper_in_topic.end_date == None) &
-             (db.paper.end_date == None)
+             (db.paper.end_date == None) &
+             (db.topic.id == db.paper.primary_topic)
              )
-        fields.extend([db.paper.primary_topic])
+        fields.extend([db.paper.primary_topic, db.topic.name])
         # db.paper.primary_topic.represent = lambda v, r: '' if v == topic_id else v
         db.paper.primary_topic.label = T('Primary topic')
+        db.topic.name.readable = False
+        db.paper.primary_topic.represent = lambda v, r: A(r.topic.name, _href=URL('default', 'topic_index', args=[v]))
         links.append(dict(header='',
-                          body=lambda r: (icon_primary_paper if r.paper_in_topic.is_primary else '')))
+                          body=lambda r: (icon_primary_paper if r.paper_in_topic.is_primary else icon_all_paper)))
 
     else:
         q = ((db.paper.primary_topic == topic_id) &
              (db.paper.end_date == None) &
              (db.paper.paper_id == db.paper_in_topic.paper_id) &
+             (db.paper_in_topic.topic == topic_id) &
              (db.paper_in_topic.end_date == None)
              )
         fields.extend([db.paper_in_topic.num_reviews, db.paper_in_topic.score])
@@ -48,6 +52,7 @@ def paper_topic_grid(topic_id, all_papers=False):
         args=request.args[:1], # The first parameter is the topic id.
         orderby=orderby,
         fields=fields,
+        field_id=db.paper.id,
         csv=False, details=False,
         links=links,
         links_placement='left',
