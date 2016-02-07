@@ -281,12 +281,12 @@ def review_history():
     db.review.paper.represent = lambda v, r: represent_specific_paper_version(v)
     q = ((db.review.paper_id == request.args(0)) &
          (db.review.topic == request.args(1)) &
-         (db.review.author == review_utils.safe_int(request.args(1))))
+         (db.review.author == review_utils.safe_int(request.args(2))))
     grid = SQLFORM.grid(q,
         args=request.args[:3],
         fields=[db.review.grade, db.review.useful_count, db.review.content,
                 db.review.paper, db.review.start_date],
-        details=False,
+        details=True, csv=False,
         editable=False, deletable=False, create=False,
         maxtextlength=48,
         )

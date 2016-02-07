@@ -130,79 +130,6 @@ def reviewers_topic_grid():
     return grid
 
 
-def paper_review_grid():
-    """Grid of reviews for a paper.
-    The arguments are:
-    - paper_id
-    - topic_id (optional)
-    """
-    paper_id = request.args(0)
-    topic_id = request.args(1)
-    # If topic_id is None, then uses as topic_id the main topic of the paper.
-    if topic_id is None:
-        paper = db((db.paper.paper_id == paper_id) &
-                   (db.paper.end_date == None)).select().first()
-        topic_id = paper.primary_topic
-    q = ((db.review.paper_id == paper_id) &
-         (db.review.topic == topic_id) &
-         (db.review.end_date == None))
-    # Retrieves the edit history of reviews.
-    def get_review_history(r):
-        review_history_len = db((db.review.paper_id == paper_id) &
-                                (db.review.topic == topic_id) &
-                                (db.review.author == r.author)).count()
-        return '' if review_history_len < 2 else A(T('Review history'),
-                                                     _href=URL('default', 'review_history',
-                                                               args=[paper_id, topic_id, r.author]))
-    # Retrieves the version of paper reviewed, if different from current one.
-    current_paper = db((db.paper.paper_id == paper_id) &
-                       (db.paper.end_date == None)).select().first()
-    def get_reviewed_paper(r):
-        if r.paper == current_paper.id:
-            return 'Current'
-        else:
-            return A(T('View'), _href=URL('default', 'view_specific_paper_version', args=[r.paper]))
-    links = []
-    db.review.paper.readable = False
-    # Link to review edit history if any.
-    links.append(dict(header='',
-                      body=lambda r: get_review_history(r)))
-    # Link to actual version of paper reviewed, if different from current one.
-    links.append(dict(header='Reviewed version',
-                      body=lambda r: get_reviewed_paper(r)))
-    edit_review_link=A(T('Edit'), cid=request.cid, _href=URL('components', 'do_review', args=[paper_id, topic_id]))
-    db.review.author.represent = lambda v, r: CAT(B('You'), ' ', SPAN('(', edit_review_link, ')')) if v == auth.user_id else v
-    grid = SQLFORM.grid(q,
-        args=request.args[:2],
-        fields=[db.review.grade, db.review.useful_count, db.review.content,
-                db.review.paper_id, db.review.paper, db.review.author, db.review.start_date],
-        links=links,
-        orderby=~db.review.start_date,
-        details=True, csv=False,
-        editable=False, deletable=False, create=False,
-        maxtextlength=48,
-        )
-    return grid
-
-
-def paper_reviews():
-    """Returns a list of paper reviews, together if appropriate with a link
-    to add one more review."""
-    grid = paper_review_grid()
-    paper_id = request.args(0)
-    button_list = []
-    if auth.user_id is not None:
-        # We let a user add a review only if it has not written one already.
-        no_user_review = db((db.review.author == auth.user_id) &
-                            (db.review.paper_id == paper_id)).isempty()
-        if no_user_review:
-            button_review = A(icon_add, T('Write a review'),
-                              _class='btn btn-danger',
-                              _href=URL('default', 'do_review', args=[paper_id]))
-            button_list.append(button_review)
-    return dict(grid=grid, button_list=button_list)
-
-
 def paper_info():
     """Returns information on a paper.
         Arguments:
@@ -257,6 +184,11 @@ def paper_info():
     latest_version_date = represent_date(paper.start_date, paper)
     earliest_paper = db(db.paper.paper_id == paper_id).select(orderby=db.paper.start_date).first()
     first_version_date = earliest_paper.start_date
+    # Creates the button list.
+    button_list = []
+    if access.is_logged_in():
+        button_list.append(A(icon_edit, T('Edit paper'), _class='btn btn-warning',
+         _href=URL('default', 'edit_paper', args=[paper_id])))
     return dict(paper=paper,
                 topics=topics_span,
                 first_version_date=first_version_date,
@@ -264,12 +196,93 @@ def paper_info():
                 abstract=text_store_read(paper.abstract),
                 score=primary_paper_topic.score if primary_paper_topic else None,
                 num_reviews=primary_paper_topic.num_reviews if primary_paper_topic else None,
+                button_list=button_list,
                 )
+
+
+
+def paper_review_grid():
+    """Grid of reviews for a paper.
+    The arguments are:
+    - paper_id
+    - topic_id (optional)
+    """
+    paper_id = request.args(0)
+    topic_id = request.args(1)
+    # If topic_id is None, then uses as topic_id the main topic of the paper.
+    if topic_id is None:
+        paper = db((db.paper.paper_id == paper_id) &
+                   (db.paper.end_date == None)).select().first()
+        topic_id = paper.primary_topic
+    q = ((db.review.paper_id == paper_id) &
+         (db.review.topic == topic_id) &
+         (db.review.end_date == None))
+    # Retrieves the edit history of reviews.
+    def get_review_history(r):
+        review_history_len = db((db.review.paper_id == paper_id) &
+                                (db.review.topic == topic_id) &
+                                (db.review.author == r.author)).count()
+        return '' if review_history_len < 2 else A(T('Review history'), cid=request.cid,
+                                                     _href=URL('default', 'review_history',
+                                                               args=[paper_id, topic_id, r.author]))
+    # Retrieves the version of paper reviewed, if different from current one.
+    current_paper = db((db.paper.paper_id == paper_id) &
+                       (db.paper.end_date == None)).select().first()
+    def get_reviewed_paper(r):
+        if r.paper == current_paper.id:
+            return 'Current'
+        else:
+            return A(T('View'), _href=URL('default', 'view_specific_paper_version', args=[r.paper]))
+    links = []
+    db.review.paper.readable = False
+    # Link to review edit history if any.
+    links.append(dict(header='',
+                      body=lambda r: get_review_history(r)))
+    # Link to actual version of paper reviewed, if different from current one.
+    links.append(dict(header='Reviewed version',
+                      body=lambda r: get_reviewed_paper(r)))
+    edit_review_link=A(T('Edit'), cid=request.cid, _href=URL('components', 'do_review', args=[paper_id, topic_id]))
+    db.review.author.represent = lambda v, r: CAT(B('You'), ' ', SPAN('(', edit_review_link, ')')) if v == auth.user_id else v
+    grid = SQLFORM.grid(q,
+        args=request.args[:2],
+        fields=[db.review.grade, db.review.useful_count, db.review.content,
+                db.review.paper_id, db.review.paper, db.review.author, db.review.start_date],
+        links=links,
+        orderby=~db.review.start_date,
+        details=True, csv=False,
+        editable=False, deletable=False, create=False,
+        maxtextlength=48,
+        )
+    return grid
+
+def paper_reviews():
+    """List of reviews for the current paper."""
+    grid = paper_review_grid()
+    paper_id = request.args(0)
+    button_list = []
+    if auth.user_id is not None:
+        # We let a user add a review only if it has not written one already.
+        no_user_review = db((db.review.author == auth.user_id) &
+                            (db.review.paper_id == paper_id)).isempty()
+        if no_user_review:
+            button_review = A(icon_add, T('Write a review'),
+                              _class='btn btn-danger', cid=request.cid,
+                              _href=URL('default', 'do_review', args=[paper_id]))
+            button_list.append(button_review)
+        else:
+            button_your_review = A(icon_your_review, T('Your review'),
+                                   _class='btn btn-success', cid=request.cid,
+                                   _href=URL('components', 'view_review', args=[paper_id]))
+            button_list.append(button_your_review)
+    return dict(grid=grid, button_list=button_list)
+
 
 @auth.requires_login()
 def do_review():
-    """Performs the review of a paper.  The arguments are:
-    - paper_id : the actual paper the person read.
+    """Shows to a user their review of a paper, allowing them to edit it
+    or to enter it for the first time.  The arguments are:
+    - paper_id : the paper.
+    - v / e: view, or edit.
     - topic.id : the id of the topic.
     If there is a current review, then lets the user edit that instead,
     keeping track of the old review.
@@ -330,4 +343,9 @@ def do_review():
                          )
         session.flash = T('Your review has been accepted.')
         redirect(URL('default', 'view_paper', args=[paper.paper_id]))
-    return form
+    button_list = []
+    button_list.append(A(icon_reviews, ))
+
+    return dict(button_list=button_list,
+                form=form)
+
