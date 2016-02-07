@@ -267,8 +267,11 @@ def do_review():
     keeping track of the old review.
     """
     # TODO: verify permissions.
-    paper = db.paper(request.args(0))
+    paper = db((db.paper.paper_id == request.args(0)) &
+               (db.paper.end_date == None)).select().first()
     topic = db.topic(request.args(1))
+    if topic is None:
+        topic = db.topic(paper.primary_topic)
     if paper is None or topic is None:
         session.flash = T('No such paper')
         redirect(URL('default', 'index'))
@@ -318,7 +321,7 @@ def do_review():
                          grade=form.vars.grade,
                          )
         session.flash = T('Your review has been accepted.')
-        redirect(URL('default', 'view_paper_in_topic', args=[paper.paper_id, topic.id]))
+        redirect(URL('default', 'view_paper', args=[paper.paper_id]))
     return dict(form=form)
 
 

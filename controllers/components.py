@@ -40,6 +40,7 @@ def paper_topic_grid(topic_id, all_papers=False):
              )
         fields.extend([db.paper_in_topic.num_reviews, db.paper_in_topic.score])
         orderby = ~db.paper_in_topic.score
+        links.append(dict(header='', body=lambda r: icon_primary_paper))
     db.paper.title.represent = lambda v, r: A(v, _href=URL('default', 'view_paper',
                                                            args=[r.paper_in_topic.paper_id, topic.id]))
     # links.append(dict(header='',

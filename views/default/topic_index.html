@@ -3,8 +3,9 @@
 
 {{block header}}
 {{end}}
+<h1>{{=topic.name}}</h1>
 
-<h2>Papers in {{=topic.name}}</h2>
+<h2>Papers</h2>
 {{=LOAD('components', 'paper_topic_index', args=[topic.id], ajax=True)}}
 
 <h2>Reviewers</h2>
