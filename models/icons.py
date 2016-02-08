@@ -5,5 +5,6 @@ icon_all_paper = I(_class='fa fa-circle-o')
 icon_pick_review = SPAN(I(_class='fa fa-align-right'), I(_class='fa fa-align-left'))
 icon_empty = I(_class='fa fa-circle-o hidden')
 icon_edit = I(_class='fa fa-pencil-square-o')
-icon_your_review = I(_class='fa fa-balance-scale')
 icon_reviews = I(_class='fa fa-balance-scale')
+icon_view = I(_class='fa fa-eye')
+icon_your_review = icon_view

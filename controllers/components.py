@@ -290,7 +290,8 @@ def do_review():
     # TODO: verify permissions.
     paper = db((db.paper.paper_id == request.args(0)) &
                (db.paper.end_date == None)).select().first()
-    topic = db.topic(request.args(1))
+    topic = db.topic(request.args(2))
+    is_view = request.args(1) == 'v'
     if topic is None:
         topic = db.topic(paper.primary_topic)
     if paper is None or topic is None:
@@ -318,10 +319,10 @@ def do_review():
     db.review.topic.default = topic.id
     db.review.start_date.label = T('Review date')
     db.review.end_date.readable = False
-    db.review.useful_count.readable = False
+    db.review.useful_count.readable = is_view
     db.review.old_score.default = paper_in_topic.score
     # Creates the form for editing.
-    form = SQLFORM(db.review, record=current_review, readonly=(request.args(1) == 'v'))
+    form = SQLFORM(db.review, record=current_review, readonly=is_view)
     form.vars.author = auth.user_id
     form.vars.content = None if current_review is None else text_store_read(current_review.content)
     if form.validate():
@@ -342,17 +343,17 @@ def do_review():
                          grade=form.vars.grade,
                          )
         session.flash = T('Your review has been accepted.')
-        redirect(URL('default', 'view_paper', args=[paper.paper_id]))
+        redirect(URL('components', 'do_review', args=[paper.paper_id, 'v']))
     button_list = []
     button_list.append(A(icon_reviews, T('All reviews'), cid=request.cid,
                          _class='btn btn-success',
                          _href=URL('components', 'paper_reviews', args=[paper.paper_id])))
-    if request.args(1) == 'v':
+    if is_view:
         button_list.append(A(icon_edit, T('Edit review'), cid=request.cid,
                              _class='btn btn-warning',
                              _href=URL('components', 'do_review', args=[paper.paper_id, 'e'])))
     else:
-        button_list.append(A(icon_edit, T('Your review'), cid=request.cid,
+        button_list.append(A(icon_your_review, T('Your review'), cid=request.cid,
                              _class='btn btn-success',
                              _href=URL('components', 'do_review', args=[paper.paper_id, 'v'])))
     return dict(button_list=button_list,
