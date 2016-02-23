@@ -258,31 +258,6 @@ def edit_paper():
     return dict(form=form, is_create=is_create)
 
 
-def review_history():
-    """Shows the review history of a certain paper by a certain author.
-    The arguments are:
-    - paper_id
-    - topic id
-    - author
-    """
-    db.review.start_date.label = T('Review date')
-    db.review.content.label = T('Review')
-    db.review.paper.represent = lambda v, r: represent_specific_paper_version(v)
-    q = ((db.review.paper_id == request.args(0)) &
-         (db.review.topic == request.args(1)) &
-         (db.review.author == review_utils.safe_int(request.args(2))))
-    grid = SQLFORM.grid(q,
-        args=request.args[:3],
-        fields=[db.review.grade, db.review.useful_count, db.review.content,
-                db.review.paper, db.review.start_date],
-        details=True, csv=False,
-        editable=False, deletable=False, create=False,
-        maxtextlength=48,
-        )
-    author = db.auth_user(request.args(2))
-    return dict(grid=grid,
-                author=author)
-
 def user():
     """
     exposes:

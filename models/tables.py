@@ -113,7 +113,7 @@ db.paper_in_topic.score.represent = represent_paper_score
 db.define_table('reviewer',
                 Field('user', db.auth_user, default=auth.user_id),
                 Field('topic', 'reference topic'),
-                Field('reputation', 'double'),
+                Field('reputation', 'double', default=0),
                 Field('is_reviewer', 'boolean'),
                 Field('is_author', 'boolean'),
                 Field('is_admin', 'boolean'),
@@ -140,6 +140,7 @@ db.review_application.outcome.default = 0
 db.define_table('review',
                 Field('author', db.auth_user, default=auth.user_id),
                 Field('paper_id',), # Reference to the paper series of which this is a paper.
+                Field('review_id'), # ID of this review through time.  Similar to paper_id for papers.
                 Field('paper', 'reference paper'), # A review is of a specific paper instance.
                 Field('topic', 'reference topic'), # Strictly speaking useless as can be reconstructed.  Keep?
                 Field('start_date', 'datetime', default=datetime.utcnow()),
@@ -152,6 +153,7 @@ db.define_table('review',
 db.review.author.label = T('Reviewer')
 db.review.author.represent = represent_author
 db.review.author.writable = False
+db.review.review_id.readable = db.review.review_id.writable = False
 db.review.paper_id.writable = False
 db.review.topic.writable = False
 db.review.start_date.writable = db.review.end_date.writable = False
