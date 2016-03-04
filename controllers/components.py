@@ -3,7 +3,11 @@
 
 import access
 import review_utils
+from component_utils import component_fail
 
+def empty():
+    """In case you want an empty component (say, after an error)."""
+    return ""
 
 def paper_topic_grid(topic_id, all_papers=False):
     """Produces a grid containing the papers in a topic.
@@ -13,7 +17,9 @@ def paper_topic_grid(topic_id, all_papers=False):
     - all_papers=y (in query): if yes, then also papers that are not primary in the topic
       will be included.
     """
-    topic = db.topic(topic_id) or redirect(URL('default', 'index'))
+    topic = db.topic(topic_id)
+    if topic is None:
+        component_fail(T('No such topic.'))
     fields = [db.paper_in_topic.paper_id, db.paper.id, db.paper.paper_id,
               db.paper.title, db.paper.authors, db.paper_in_topic.is_primary]
     orderby = db.paper.start_date
@@ -70,6 +76,7 @@ def paper_topic_grid(topic_id, all_papers=False):
 
 def paper_topic_index():
     """Returns a grid, and associated code, to display all papers in a topic.
+
     Arguments:
         - topic_id (in path): id of the topic
         - all_papers=y: in query, indicates whether all papers should be shown.
@@ -99,11 +106,12 @@ def paper_topic_index():
                             _href=URL('components', 'paper_topic_index',
                                       args=request.args, vars=topic_paper_vars))
     button_list = [button_topic_papers, button_all_papers]
-    if access.is_logged_in():
+    if access.can_review(topic_id):
         pick_paper_review_link = A(icon_pick_review, T('Choose paper to review'),
                                    _class='btn btn-primary',
                                    _href=URL('default', 'pick_review', args=[topic_id]))
         button_list.append(pick_paper_review_link)
+    if access.can_add_paper(topic_id):
         add_paper_link = A(icon_add, 'Add a paper', _class='btn btn-danger',
                            _href=URL('default', 'edit_paper', vars=dict(topic=topic_id)))
         button_list.append(add_paper_link)
@@ -117,7 +125,7 @@ def reviewers_topic_grid():
     The arguments are:
     - topic_id (in path)
     """
-    topic = db.topic(request.args(0)) or redirect(URL('default', 'index'))
+    topic = db.topic(request.args(0)) or component_fail(T('No such topic'))
     q = ((db.reviewer.topic == topic.id) &
          (db.reviewer.user == db.auth_user.id))
     grid = SQLFORM.grid(q,
@@ -188,9 +196,9 @@ def paper_info():
     first_version_date = earliest_paper.start_date
     # Creates the button list.
     button_list = []
-    if access.is_logged_in():
+    if access.can_edit_paper(topic_id):
         button_list.append(A(icon_edit, T('Edit paper'), _class='btn btn-warning',
-         _href=URL('default', 'edit_paper', args=[paper_id])))
+                             _href=URL('default', 'edit_paper', args=[paper_id])))
     return dict(paper=paper,
                 topics=topics_span,
                 first_version_date=first_version_date,
@@ -211,6 +219,7 @@ def paper_review_grid():
     """
     paper_id = request.args(0)
     topic_id = request.args(1)
+    logger.info("paper_review_grid : %r %r" % (paper_id, topic_id))
     # If topic_id is None, then uses as topic_id the main topic of the paper.
     if topic_id is None:
         paper = db((db.paper.paper_id == paper_id) &
@@ -221,6 +230,7 @@ def paper_review_grid():
          (db.review.end_date == None))
     # Retrieves the edit history of reviews.
     def get_review_history(r):
+        logger.info("get_review_history : %r %r %r" % (paper_id, topic_id, r))
         review_history_len = db((db.review.paper_id == paper_id) &
                                 (db.review.topic == topic_id) &
                                 (db.review.author == r.author)).count()
@@ -244,7 +254,7 @@ def paper_review_grid():
     # Link to actual version of paper reviewed, if different from current one.
     links.append(dict(header='Reviewed version',
                       body=lambda r: get_reviewed_paper(r)))
-    edit_review_link=A(T('Edit'), cid=request.cid, _href=URL('components', 'do_review', args=[paper_id, topic_id]))
+    # edit_review_link=A(T('Edit'), cid=request.cid, _href=URL('components', 'do_review', args=[paper_id, topic_id]))
     grid = SQLFORM.grid(q,
         args=request.args[:2],
         fields=[db.review.grade, db.review.useful_count, db.review.content, db.review.review_id,
@@ -257,21 +267,26 @@ def paper_review_grid():
         )
     return grid
 
+
 def paper_reviews():
-    """List of reviews for the current paper."""
+    """List of reviews for the current paper.
+       Argument: paper_id"""
     grid = paper_review_grid()
     paper_id = request.args(0)
+    paper = db((db.paper.paper_id == paper_id) &
+               (db.paper.end_date == None)).select().first()
+    topic_id = paper.primary_topic
     button_list = []
     if auth.user_id is not None:
         # We let a user add a review only if it has not written one already.
         no_user_review = db((db.review.author == auth.user_id) &
                             (db.review.paper_id == paper_id)).isempty()
-        if no_user_review:
+        if no_user_review and access.can_review(topic_id):
             button_review = A(icon_add, T('Write a review'),
                               _class='btn btn-danger', cid=request.cid,
                               _href=URL('components', 'do_review', args=[paper_id]))
             button_list.append(button_review)
-        else:
+        elif not no_user_review:
             button_your_review = A(icon_your_review, T('Your review'),
                                    _class='btn btn-success', cid=request.cid,
                                    _href=URL('components', 'do_review', args=[paper_id, 'v']))
@@ -289,23 +304,27 @@ def do_review():
     If there is a current review, then lets the user edit that instead,
     keeping track of the old review.
     """
-    # TODO: verify permissions.
     paper = db((db.paper.paper_id == request.args(0)) &
                (db.paper.end_date == None)).select().first()
     topic = db.topic(request.args(2))
     is_view = request.args(1) == 'v'
+
+    #logger.info("do_review paper.id %r topic.id %r is_view %r" % (paper,topic,is_view))
+
     if topic is None:
         topic = db.topic(paper.primary_topic)
     if paper is None or topic is None:
-        session.flash = T('No such paper')
-        redirect(URL('default', 'index'))
+        component_fail(T('No such paper'))
+
     # Checks whether the paper is currently in the topic.
     paper_in_topic = db((db.paper_in_topic.paper_id == paper.paper_id) &
                         (db.paper_in_topic.topic == topic.id) &
                         (db.paper_in_topic.end_date == None)).select().first()
     if paper_in_topic is None:
-        session.flash = T('The paper is not in the selected topic')
-        redirect(URL('default', 'index'))
+        component_fail(T('The paper is not in the selected topic'))
+    # Verify permissions.
+    if not access.can_review(topic.id):
+        component_fail(T('You do not have the permission to review this topic'))
     # Fishes out the current review, if any.
     current_review = db((db.review.author == auth.user_id) &
                         (db.review.paper_id == paper.paper_id) &
@@ -365,14 +384,14 @@ def do_review():
     button_list.append(A(icon_reviews, T('All reviews'), cid=request.cid,
                          _class='btn btn-success',
                          _href=URL('components', 'paper_reviews', args=[paper.paper_id])))
-    if is_view:
+    if is_view and access.can_review(topic.id):
         button_list.append(A(icon_edit, T('Edit review'), cid=request.cid,
                              _class='btn btn-warning',
                              _href=URL('components', 'do_review', args=[paper.paper_id, 'e'])))
-    else:
-        button_list.append(A(icon_your_review, T('Your review'), cid=request.cid,
-                             _class='btn btn-success',
-                             _href=URL('components', 'do_review', args=[paper.paper_id, 'v'])))
+    # else:
+    #    button_list.append(A(icon_your_review, T('Your review'), cid=request.cid,
+    #                         _class='btn btn-success',
+    #                         _href=URL('components', 'do_review', args=[paper.paper_id, 'v'])))
     return dict(button_list=button_list,
                 form=form)
 
@@ -402,7 +421,10 @@ def review_history():
     # We let a user add a review only if it has not written one already.
     no_user_review = db((db.review.author == auth.user_id) &
                         (db.review.paper_id == paper_id)).isempty()
-    if no_user_review:
+    paper =  db((db.paper.paper_id == paper_id) &
+                   (db.paper.end_date == None)).select().first()
+    topic_id = paper.primary_topic
+    if no_user_review and access.can_review(topic_id):
         button_review = A(icon_add, T('Write a review'),
                           _class='btn btn-danger', cid=request.cid,
                           _href=URL('components', 'do_review', args=[paper_id]))

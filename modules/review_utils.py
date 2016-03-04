@@ -25,5 +25,3 @@ def safe_int(s):
         return int(s)
     except Exception, e:
         return None
-
-

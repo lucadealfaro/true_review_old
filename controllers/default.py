@@ -4,6 +4,7 @@
 from google.appengine.api import taskqueue
 import json
 import review_utils
+import access
 
 def dbupdate():
     return "ok"
@@ -33,11 +34,16 @@ def index():
     # Displays list of topics.
     q = db.topic
     links=[]
-    if auth.user_id:
-        links.append(dict(header='',
-                          body=lambda r: A('Edit', _href=URL('default', 'edit_topic', args=[r.id]))))
-        links.append(dict(header='',
-                          body=lambda r: A('Delete', _href=URL('default', 'delete_topic', args=[r.id]))))
+    links.append(dict(header='',
+                      body=lambda r: 
+                          A('Edit', _href=URL('default', 'edit_topic', args=[r.id]))
+                             if access.can_edit_topic(r.id) else None
+                      ))
+    links.append(dict(header='',
+                      body=lambda r: 
+                           A('Delete', _href=URL('default', 'delete_topic', args=[r.id]))
+                             if access.can_delete_topic(r.id) else None
+                      ))
     grid = SQLFORM.grid(q,
         csv=False, details=False,
         links=links,
@@ -47,7 +53,7 @@ def index():
         maxtextlength=48,
     )
     add_button = A(icon_add, 'Add topic', _class='btn btn-success',
-                    _href=URL('default', 'create_topic')) if auth.user_id else None
+                    _href=URL('default', 'create_topic')) if access.can_create_topic() else None
     return dict(grid=grid, add_button=add_button)
 
 
@@ -56,11 +62,19 @@ def delete_topic():
     """Deletion of a topic.  We would need to unlink from the topic all the papers that are in it.
     Deletion should be possible only if there are no reviews. Otherwise we need to figure out
     what to do; perhaps simply hide the topic from the main listing."""
+    topic_id = request.args(0)
+    if not access.can_delete_topic(topic_id):
+        session.flash = T('You do not have the permission to create a topic')
+        redirect(URL('default', 'index'))
+    # TODO
     return dict()
 
 
 @auth.requires_login()
 def create_topic():
+    if not access.can_create_topic():
+        session.flash = T('You do not have the permission to create a topic')
+        redirect(URL('default', 'index'))
     form = SQLFORM(db.topic)
     if form.validate():
         db.topic.insert(name=form.vars.name,
@@ -73,15 +87,22 @@ def create_topic():
 @auth.requires_login()
 def edit_topic():
     """Allows editing of a topic.  The parameter is the topic id."""
-    topic = db.topic(request.args(0))
+    topic_id = request.args(0)
+    if not access.can_edit_topic(topic_id):
+        session.flash = T('You do not have the permission to edit this topic')
+        redirect(URL('default', 'index'))
+    topic = db.topic(topic_id)
     form = SQLFORM(db.topic, record=topic)
-    form.vars.description = text_store_read(topic.description)
+    # The "or <emptystring>" part fixes a bug that showed the datastore key in the form
+    # when the description itself is empty.
+    form.vars.description = text_store_read(topic.description) or ""
+
     if form.validate():
         topic.update_record(
             name=form.vars.name,
         )
         text_store_write(form.vars.description, key=topic.description)
-        session.flash = T('The topic has been created')
+        session.flash = T('The topic has been modified')
         redirect(URL('default', 'index'))
     return dict(form=form)
 
@@ -139,18 +160,26 @@ def edit_paper():
 
     Note that I am assuming here that anyone can edit a paper.
     """
-    # TODO: verify permissions.
-    paper = db(db.paper.paper_id == request.args(0)).select(orderby=~db.paper.start_date).first()
+    paper_id = request.args(0)
+    user_id = auth.user
+    paper = db(db.paper.paper_id == paper_id).select(orderby=~db.paper.start_date).first()
     is_create = paper is None
     # If there is no topic,
     # Creates the form.
     default_topic_id = paper.primary_topic if paper else request.vars.topic
+    if access.is_site_admin():
+        legal_topics = db().select(db.topic.ALL)
+    else:
+        legal_topics = db((db.reviewer.user == user_id) & 
+                          (db.reviewer.topic == db.topic.id)).select()
+    logger.info("Legal topics: %r" % legal_topics)
     form = SQLFORM.factory(
         Field('title', default=None if is_create else paper.title),
         Field('authors', 'list:string', default=None if is_create else paper.authors),
         Field('abstract', 'text', default=None if is_create else text_store_read(paper.abstract)),
         Field('file', default=None if is_create else paper.file),
-        Field('primary_topic', 'reference topic', default=default_topic_id, requires=IS_IN_DB(db, 'topic.id', '%(name)s')),
+        Field('primary_topic', 'reference topic', default=default_topic_id, 
+              requires=IS_IN_DB(db(), 'topic.id', '%(name)s')),
         Field('secondary_topics'),
     )
     def validate_paper_edit_form(form):
@@ -166,8 +195,10 @@ def edit_paper():
                     if t is None:
                         form.errors.secondary_topics = T('The topic %r does not exist') % nn
                         return form
-                    else:
-                        secondary_topic_ids.append(t.id)
+                    if not access.can_add_paper(t.id):
+                        form.errors.secondary_topics = T('You do not have the permission to include topic %r') % nn
+                        return form
+                    secondary_topic_ids.append(t.id)
             form.vars.secondary_topic_ids = list(set(secondary_topic_ids) - {primary_topic_id})
         return form
 
@@ -188,6 +219,7 @@ def edit_paper():
                             start_date=datetime.utcnow(),
                             end_date=None
                             )
+            session.flash = T('The paper has been added')
         else:
             random_paper_id = paper.paper_id
             # Checks if anything has changed about the paper, as opposed to the topics.
@@ -196,6 +228,7 @@ def edit_paper():
             if form.vars.abstract != text_store_read(paper.abstract):
                 abstract_id = text_store_write(form.vars.abstract)
                 is_abstract_different = True
+            session.flash = T('The paper has been updated')
             if ((form.vars.title != paper.title) or
                     (form.vars.authors != paper.authors) or
                     is_abstract_different):
@@ -214,6 +247,7 @@ def edit_paper():
                                 )
             else:
                 logger.info("The paper itself is unchanged.")
+
         # Then, we take care of the topics.
         new_topics = set({form.vars.primary_topic}) | set(form.vars.secondary_topic_ids)
         logger.info("new topics: %r" % new_topics)
@@ -249,7 +283,6 @@ def edit_paper():
                                          score=last_occurrence.score,
                                          )
         # The paper has been updated.
-        session.flash = T('The paper has been updated.')
         # If we were looking at a specific topic, goes back to it.
         if request.vars.topic is not None:
             redirect(URL('default', 'topic_index', args=[request.vars.topic]))

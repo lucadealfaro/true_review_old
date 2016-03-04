@@ -48,7 +48,7 @@ def text_store_write(v, key=None):
         return kk
 
 def represent_text_field(v, r):
-    return text_store_read(int(v))
+    return text_store_read(int(v)) if v is not None else ""
 
 db.define_table('topic',
                 Field('name'),

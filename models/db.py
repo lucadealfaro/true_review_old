@@ -153,4 +153,4 @@ else:
     logger.info("User: %r" % session.user_key)
 
 # Is the user logged in?
-is_logged_in = auth.user_id is not None
+# is_logged_in = auth.user_id is not None
