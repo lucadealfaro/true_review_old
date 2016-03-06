@@ -36,7 +36,8 @@ gdb.define_table('keyval',
 # Functions for storing text
 def text_store_read(k):
     """Reads a keystore value for key k."""
-    return gdb.keyval(k).content
+    value = gdb.keyval(k)
+    return value.content if value is not None else ""
 
 def text_store_write(v, key=None):
     """Writes a text store value of v, with key k if specified.  Returns the key."""

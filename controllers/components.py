@@ -3,7 +3,7 @@
 
 import access
 import review_utils
-from component_utils import component_fail
+from component_utils import component_fail, get_paper_and_topic_ids
 
 def empty():
     """In case you want an empty component (say, after an error)."""
@@ -149,13 +149,7 @@ def paper_info():
         - id=pid (in query) where pid is the id of the paper in the version.
         - date=date (in query) shows the version that was active at a given date.
     """
-    paper_id = request.args(0)
-    topic_id = request.args(1)
-    # If topic_id is None, then uses as topic_id the main topic of the paper.
-    if topic_id is None:
-        paper = db((db.paper.paper_id == paper_id) &
-                   (db.paper.end_date == None)).select().first()
-        topic_id = paper.primary_topic
+    (paper_id, topic_id) = get_paper_and_topic_ids()
     if request.vars.id is not None:
         paper = db(db.paper.id == id).select().first()
         paper_id = paper.paper_id # For consistency
@@ -213,18 +207,16 @@ def paper_info():
 
 def paper_review_grid():
     """Grid of reviews for a paper.
+    
     The arguments are:
     - paper_id
-    - topic_id (optional)
+    - topic_id or the string "primary"
     """
-    paper_id = request.args(0)
-    topic_id = request.args(1)
+    (paper_id, topic_id) = get_paper_and_topic_ids()
+
+    # DEBUG
     logger.info("paper_review_grid : %r %r" % (paper_id, topic_id))
-    # If topic_id is None, then uses as topic_id the main topic of the paper.
-    if topic_id is None:
-        paper = db((db.paper.paper_id == paper_id) &
-                   (db.paper.end_date == None)).select().first()
-        topic_id = paper.primary_topic
+
     q = ((db.review.paper_id == paper_id) &
          (db.review.topic == topic_id) &
          (db.review.end_date == None))
@@ -269,13 +261,14 @@ def paper_review_grid():
 
 
 def paper_reviews():
-    """List of reviews for the current paper.
+    """List of reviews for a paper.
        Argument: paper_id"""
     grid = paper_review_grid()
-    paper_id = request.args(0)
+    (paper_id, topic_id) = get_paper_and_topic_ids()
+    # DEBUG
+    # logger.info("paper_reviews: args(0) %r args(1) %r" % (request.args(0), request.args(1)))
     paper = db((db.paper.paper_id == paper_id) &
                (db.paper.end_date == None)).select().first()
-    topic_id = paper.primary_topic
     button_list = []
     if auth.user_id is not None:
         # We let a user add a review only if it has not written one already.
@@ -284,12 +277,12 @@ def paper_reviews():
         if no_user_review and access.can_review(topic_id):
             button_review = A(icon_add, T('Write a review'),
                               _class='btn btn-danger', cid=request.cid,
-                              _href=URL('components', 'do_review', args=[paper_id]))
+                              _href=URL('components', 'do_review', args=[paper_id, topic_id, 'e']))
             button_list.append(button_review)
-        elif not no_user_review:
+        elif not no_user_review: # user has a review
             button_your_review = A(icon_your_review, T('Your review'),
                                    _class='btn btn-success', cid=request.cid,
-                                   _href=URL('components', 'do_review', args=[paper_id, 'v']))
+                                   _href=URL('components', 'do_review', args=[paper_id, topic_id, 'v']))
             button_list.append(button_your_review)
     return dict(grid=grid, button_list=button_list)
 
@@ -299,22 +292,22 @@ def do_review():
     """Shows to a user their review of a paper, allowing them to edit it
     or to enter it for the first time.  The arguments are:
     - paper_id : the paper.
+    - topic.id : the id of the topic, or the string "primary".
     - v / e: view, or edit.
-    - topic.id : the id of the topic.
     If there is a current review, then lets the user edit that instead,
     keeping track of the old review.
     """
+    (paper_id, topic_id) = get_paper_and_topic_ids()
+    is_view = request.args(2) == 'v'
+
     paper = db((db.paper.paper_id == request.args(0)) &
                (db.paper.end_date == None)).select().first()
-    topic = db.topic(request.args(2))
-    is_view = request.args(1) == 'v'
+    topic = db.topic(topic_id)
 
     #logger.info("do_review paper.id %r topic.id %r is_view %r" % (paper,topic,is_view))
 
-    if topic is None:
-        topic = db.topic(paper.primary_topic)
     if paper is None or topic is None:
-        component_fail(T('No such paper'))
+        component_fail(T('No such paper or topic.'))
 
     # Checks whether the paper is currently in the topic.
     paper_in_topic = db((db.paper_in_topic.paper_id == paper.paper_id) &
@@ -323,8 +316,8 @@ def do_review():
     if paper_in_topic is None:
         component_fail(T('The paper is not in the selected topic'))
     # Verify permissions.
-    if not access.can_review(topic.id):
-        component_fail(T('You do not have the permission to review this topic'))
+    if not is_view and not access.can_review(topic.id):
+        component_fail(T('You do not have the permission to perform reviews in this topic'))
     # Fishes out the current review, if any.
     current_review = db((db.review.author == auth.user_id) &
                         (db.review.paper_id == paper.paper_id) &
@@ -379,28 +372,30 @@ def do_review():
         elif not reviewer.is_reviewer:
             reviewer.update_record(is_reviewer=True)
         session.flash = T('Your review has been accepted.')
-        redirect(URL('components', 'do_review', args=[paper.paper_id, 'v']))
+        redirect(URL('components', 'do_review', args=[paper.paper_id, topic_id, 'v']))
     button_list = []
     button_list.append(A(icon_reviews, T('All reviews'), cid=request.cid,
                          _class='btn btn-success',
-                         _href=URL('components', 'paper_reviews', args=[paper.paper_id])))
+                         _href=URL('components', 'paper_reviews', args=[paper.paper_id, topic_id])))
     if is_view and access.can_review(topic.id):
         button_list.append(A(icon_edit, T('Edit review'), cid=request.cid,
                              _class='btn btn-warning',
-                             _href=URL('components', 'do_review', args=[paper.paper_id, 'e'])))
+                             _href=URL('components', 'do_review', args=[paper.paper_id, topic_id, 'e'])))
     # else:
     #    button_list.append(A(icon_your_review, T('Your review'), cid=request.cid,
     #                         _class='btn btn-success',
-    #                         _href=URL('components', 'do_review', args=[paper.paper_id, 'v'])))
+    #                         _href=URL('components', 'do_review', args=[paper.paper_id, topic_id, 'v'])))
     return dict(button_list=button_list,
                 form=form)
 
 
 def review_history():
-    """Shows the review history of a certain paper by a certain author.
+    """Shows the review history of a certain paper by a certain author in
+    the paper primary topic.
+
     The arguments are:
     - review id (the rest of the information is taken from the review)
-    - paper id (to produce other links.
+    - paper id  (to produce other links).
     """
     db.review.paper.represent = lambda v, r: represent_specific_paper_version(v)
     review_id = request.args(0)
@@ -427,12 +422,12 @@ def review_history():
     if no_user_review and access.can_review(topic_id):
         button_review = A(icon_add, T('Write a review'),
                           _class='btn btn-danger', cid=request.cid,
-                          _href=URL('components', 'do_review', args=[paper_id]))
+                          _href=URL('components', 'do_review', args=[paper_id, topic_id, 'e']))
         button_list.append(button_review)
     else:
         button_your_review = A(icon_your_review, T('Your review'),
                                _class='btn btn-success', cid=request.cid,
-                               _href=URL('components', 'do_review', args=[paper_id, 'v']))
+                               _href=URL('components', 'do_review', args=[paper_id, topic_id, 'v']))
         button_list.append(button_your_review)
 
     author = db.auth_user(request.args(2))

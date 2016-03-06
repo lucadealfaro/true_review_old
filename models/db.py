@@ -59,6 +59,7 @@ if not request.env.web2py_runtime_gae:
     gdb = DAL(myconf.take('db.guri'), pool_size=myconf.take('db.pool_size', cast=int), check_reserved=['all'])
 else:
     if is_test_version or is_local_version:
+        logger.info("Running locally")
         db = DAL('google:sql://true-review:true-review/true_review_test', migrate_enabled=True)
         ## connect to Google BigTable (optional 'google:datastore://namespace')
         gdb = DAL('google:datastore+ndb//test')
